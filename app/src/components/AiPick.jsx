@@ -4,7 +4,7 @@ import { AiConnect, AiStatus } from './AiConnect.jsx';
 import { aiStatus, getActiveAI, setActive, forgetKey } from '../lib/ai.js';
 import { startGeneration } from '../lib/studio.js';
 import { SubscriptionWay, ConnBadge, CodexRow, ClaudeTermRow } from './PcConnect.jsx';
-import { setPreferred, askConsent } from '../lib/connection.js';
+import { setPreferred, askConsent, useConnection, preferred, osName } from '../lib/connection.js';
 import { startDemo } from '../lib/demo.js';
 import { SKILL_CMDS } from '../lib/agent.js';
 import { copy, toast } from '../lib/util.js';
@@ -26,9 +26,19 @@ export function AiPick({ p, go, idle, ready, reading = false, held = false }) {
   const [conn, setConn] = useState(null); // { openai: {model}|null, … }
   const [keyFor, setKeyFor] = useState(''); // 키 연결 창을 연 회사
   const [swap, setSwap] = useState(''); // 연결된 키의 모델 바꾸기·끊기를 펼친 회사
+  const [keyNow, setKeyNow] = useState(''); // 지금 쓰는 키의 회사(둘 다 연결했을 때 누를 한 곳)
   const afterKey = useRef(false);
-  const recheck = () => aiStatus().then(setConn, () => setConn({}));
+  const more = useRef(null);
+  const recheck = () => Promise.all([aiStatus(), getActiveAI().catch(() => null)]).then(([st, a]) => { setConn(st); setKeyNow(a?.provider || ''); }, () => setConn({}));
   useEffect(() => { recheck(); }, []);
+  // 누를 큰 버튼은 하나: 키를 연결해 두었고 구독 계정이 없으면(또는 지난번에 키로 만들었으면) 그 키의 [○○로 만들기]를 맨 위에 올리고 구독 카드는 강조하지 않음
+  const { pc, list } = useConnection({ demo: !!p.demo });
+  const subOn = list.some((c) => c.id !== 'key');
+  const keyIds = AI_CARDS.filter((c) => conn?.[c.id]).map((c) => c.id);
+  const keyMain = !p.demo && keyIds.length && (!subOn || preferred() === 'key') ? (keyIds.includes(keyNow) ? keyNow : keyIds[0]) : '';
+  // 휴대폰: lecpage 커넥트를 설치할 수 없어 구독으로는 만들 수 없음 → 그 사실 한 줄 + 휴대폰에서 되는 길(API 키)을 큰 버튼으로
+  const phone = !p.demo && osName() === 'mobile' && pc.state !== 'on';
+  const openKeys = () => { const d = more.current; if (!d) return; d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); d.querySelector('.ai-card-go')?.focus({ preventScroll: true }); };
   async function make(provider, st = conn?.[provider]) {
     if (!ready) { toast(wait || '교재를 먼저 넣어 주세요.'); return; }
     if (p.demo) { toast('체험이라 키 없이, 이 교재로 미리 만든 AI 답으로 만들어요.'); await idle(); startDemo(p.id, { request: p.request || '' }); go(2); return; }
@@ -46,6 +56,21 @@ export function AiPick({ p, go, idle, ready, reading = false, held = false }) {
     const st = await aiStatus().catch(() => ({})); setConn(st);
     if (then && a) make(a.provider, st[a.provider] || { model: a.model });
   }
+  /** API 키 카드. main: 맨 위에 올린 카드(이 화면에서 누를 큰 버튼). 연결했지만 맨 위가 아닌 카드의 [○○로 만들기]는 강조하지 않음 */
+  const card = (c, main) => {
+    const st = conn?.[c.id];
+    return (
+      <article class={`ai-card${st ? ' is-on' : ''}${main ? ' is-main' : ''}`} role="listitem" aria-labelledby={`ai-${c.id}-h`} key={c.id}>
+        <div class="ai-card-t"><h3 id={`ai-${c.id}-h`}>{c.name}</h3><span class="ai-card-by">{c.by}</span></div>
+        <dl class="ai-card-facts"><div><dt>API 키</dt><dd>{c.key}</dd></div></dl>
+        {st ? <>
+          <p class="ai-card-on small"><span class="dot-ok" aria-hidden="true" />키 연결됨 <button type="button" class="btn-link small" aria-expanded={String(swap === c.id)} onClick={() => setSwap(swap === c.id ? '' : c.id)}>바꾸기</button></p>
+          <button type="button" class={`btn${main ? ' btn-primary' : ''} ai-card-go`} disabled={!ready} onClick={() => make(c.id)}>{c.name}로 만들기</button>
+        </> : <button type="button" class="btn ai-card-go" disabled={!ready} aria-label={`${c.name} API 키 연결해 만들기`} onClick={() => make(c.id)}>API 키 연결</button>}
+        {swap === c.id && st && <KeySwap id={c.id} onDone={() => { setSwap(''); recheck(); }} onNew={() => { setSwap(''); afterKey.current = false; setKeyFor(c.id); }} />}
+      </article>
+    );
+  };
   return (
     <section class="ai-pick" aria-labelledby="ai-pick-h">
       <div class="ai-pick-head">
@@ -54,24 +79,15 @@ export function AiPick({ p, go, idle, ready, reading = false, held = false }) {
         <ConnBadge demo={!!p.demo} hint={false} />
       </div>
       {!ready && !reading && <p class="small ai-pick-wait" role="status">{wait || '교재를 넣으면 선택할 수 있어요.'}</p>}
-      <SubscriptionWay p={p} ready={ready} wait={wait} idle={idle} go={go} />
-      <details class="ai-more" open={AI_CARDS.some((c) => conn?.[c.id]) || undefined}>
+      {keyMain && <div class="ai-cards ai-cards-main" role="list">{card(AI_CARDS.find((c) => c.id === keyMain), true)}</div>}
+      {phone ? <div class="ai-phone">
+        <p class="small">ChatGPT·Claude 구독으로 만들기는 PC에서 lecpage.com을 열어서 해요.</p>
+        {!keyMain && <div class="btn-row"><button type="button" class="btn btn-primary" disabled={!ready} onClick={openKeys}>API 키 연결</button><span class="small muted">휴대폰에서는 API 키로 만들어요.</span></div>}
+      </div> : <SubscriptionWay p={p} ready={ready} wait={wait} idle={idle} go={go} quiet={!!keyMain} />}
+      <details class="ai-more" ref={more} open={(!keyMain && keyIds.length > 0) || undefined}>
         <summary><b>다른 방법</b><span class="small muted">API 키 · AI 에이전트(Skill)</span></summary>
         <div class="ai-cards" role="list">
-          {AI_CARDS.map((c) => {
-            const st = conn?.[c.id];
-            return (
-              <article class={`ai-card${st ? ' is-on' : ''}`} role="listitem" aria-labelledby={`ai-${c.id}-h`} key={c.id}>
-                <div class="ai-card-t"><h3 id={`ai-${c.id}-h`}>{c.name}</h3><span class="ai-card-by">{c.by}</span></div>
-                <dl class="ai-card-facts"><div><dt>API 키</dt><dd>{c.key}</dd></div></dl>
-                {st ? <>
-                  <p class="ai-card-on small"><span class="dot-ok" aria-hidden="true" />키 연결됨 <button type="button" class="btn-link small" aria-expanded={String(swap === c.id)} onClick={() => setSwap(swap === c.id ? '' : c.id)}>바꾸기</button></p>
-                  <button type="button" class="btn btn-primary ai-card-go" disabled={!ready} onClick={() => make(c.id)}>{c.name}로 만들기</button>
-                </> : <button type="button" class="btn ai-card-go" disabled={!ready} aria-label={`${c.name} API 키 연결해 만들기`} onClick={() => make(c.id)}>API 키 연결</button>}
-                {swap === c.id && st && <KeySwap id={c.id} onDone={() => { setSwap(''); recheck(); }} onNew={() => { setSwap(''); afterKey.current = false; setKeyFor(c.id); }} />}
-              </article>
-            );
-          })}
+          {AI_CARDS.filter((c) => c.id !== keyMain).map((c) => card(c, false))}
         </div>
         <ClaudeTermRow />
         <CodexRow p={p} ready={ready} wait={wait} idle={idle} go={go} />

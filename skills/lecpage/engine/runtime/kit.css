@@ -315,6 +315,11 @@ html.lp-dock-on{scroll-padding-bottom:calc(var(--lp-dock-h,58px) + 24px + var(--
 /* 도크·띠는 화면 아래 안전 영역(홈 막대)만큼 올라가 있으므로 그만큼 더 비움(노치 휴대폰에서 맨 끝 줄이 도크·띠와 겹치지 않게). 띠가 없으면(--lp-now-pad 0) 더하지 않음 */
 html.lp-dock-on .lpk.lpk-chrome{padding-bottom:calc(var(--lp-dock-h,58px) + 20px + var(--lp-now-pad,0px) + env(safe-area-inset-bottom,0px))}
 .lpk.lpk-chrome{display:block;height:auto;margin:0;padding:0 0 calc(var(--lp-now-pad,0px) + min(var(--lp-now-pad,0px),env(safe-area-inset-bottom,0px)))}
+/* 배포한 곳(바로 배포)이 body 맨 끝에 붙이는 '신고' 줄(<p data-host-report>)은 이 묶음 뒤에 옴: 그대로 두면 비워 둔 자리 아래, 곧 참여 막대·띠 밑에 깔려 누를 수 없음.
+   비우는 자리를 그 줄 아래로 옮김(묶음은 비우지 않고 그 줄이 같은 만큼 아래를 비움). 그 줄의 인라인 padding을 이기려고 !important */
+html body:has(>p[data-host-report]) .lpk.lpk-chrome{padding-bottom:0}
+body>p[data-host-report]{padding-bottom:calc(10px + var(--lp-now-pad,0px) + min(var(--lp-now-pad,0px),env(safe-area-inset-bottom,0px)))!important}
+html.lp-dock-on body>p[data-host-report]{padding-bottom:calc(10px + var(--lp-dock-h,58px) + 20px + var(--lp-now-pad,0px) + env(safe-area-inset-bottom,0px))!important}
 /* 꽉 찬 바닥글 바로 아래면 그 바탕색으로 이어 칠함(lecpage.js initChromeTint가 이 표시와 --lp-chrome-bg를 붙임): 묶음이 사이트 바탕색 띠로 따로 보이지 않게.
    flow-root: 맨 끝 줄('Made with Lecpage')의 위 여백까지 묶음 안에 두어 틈 없이 칠함 */
 .lpk.lpk-chrome.lpk-chrome--tint{display:flow-root;background:var(--lp-chrome-bg,transparent)}
@@ -360,6 +365,8 @@ html.lp-dock-on .lpk.lpk-now{bottom:calc(var(--lp-dock-h,58px) + 22px + env(safe
 .lpk .lp-dialog h2{font-size:1.25rem;line-height:1.3;font-weight:750}
 .lpk .lp-dialog label{display:grid;gap:4px;font-size:.92rem;font-weight:600}
 .lpk .lp-dialog .lp-consent{grid-template-columns:auto 1fr;align-items:start;font-weight:400;font-size:.84rem}
+/* 낮은 화면(가로로 든 휴대폰 844×390)에서는 창 안이 스크롤됨: 단추 줄([나중에]·[입실])은 창 바닥에 붙여 늘 누를 수 있게 */
+.lpk .lp-dialog .lp-dialog-in>.lp-compose-f:last-child{position:sticky;bottom:0;z-index:1;margin:-10px -22px -22px;padding:10px 22px 22px;background:var(--_paper)}
 .lpk .lp-sheet-h{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .lpk .lp-share-url,.lpk .lp-share-full{text-align:center;word-break:break-all;font-size:.86rem}
 .lpk .lp-share-code{text-align:center}

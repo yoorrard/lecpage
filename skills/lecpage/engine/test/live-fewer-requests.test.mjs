@@ -52,7 +52,8 @@ function fakeRoom(o = {}) {
   const opt = { ahead: 0, stale: false, hang: false, ...o };
   let last = 0; const tick = () => (last = Math.max(Date.now() + opt.ahead, last + 1));
   const log = []; const waiters = new Set(); const questions = [];
-  const snap = (since) => ({ now: tick(), state: { updatedAt: 1 }, questions: questions.filter((q) => q.updatedAt > since) });
+  const st = { updatedAt: 1 }; // 강사가 바꾸는 상태(bump: 쪽을 넘김)
+  const snap = (since) => ({ now: tick(), state: { ...st }, questions: questions.filter((q) => q.updatedAt > since) });
   const gone = () => Object.assign(new Error('aborted'), { name: 'AbortError' });
   /** ms 동안 붙잡음. 글이 올라오면 바로 → true */
   const hold = (ms, init) => new Promise((r) => {
@@ -66,7 +67,7 @@ function fakeRoom(o = {}) {
     if (p === '/state') return res({ updatedAt: 1 });
     if (p !== '/snapshot') return res({ error: 'not_found' }, { status: 404 });
     const since = Number(u.searchParams.get('since')) || 0; const w = Number(u.searchParams.get('wait')) || 0;
-    if (w && since > 0 && !questions.some((q) => q.updatedAt > since)) {
+    if (w && since > 0 && !questions.some((q) => q.updatedAt > since) && !(st.updatedAt > since)) {
       if (opt.hang) return never(init);
       const first = snap(since);
       const woke = await hold(w * 1000, init);
@@ -82,10 +83,13 @@ function fakeRoom(o = {}) {
     log.push(e);
     try { return await answer(u, p, init); } finally { e.done = true; e.doneAt = Date.now(); }
   };
-  const push = (text) => { const t = tick(); questions.push({ id: 'q' + t, text, createdAt: t, updatedAt: t }); for (const x of [...waiters]) { clearTimeout(x.t); waiters.delete(x); x.r(); } };
+  const wake = () => { for (const x of [...waiters]) { clearTimeout(x.t); waiters.delete(x); x.r(); } };
+  const push = (text) => { const t = tick(); questions.push({ id: 'q' + t, text, createdAt: t, updatedAt: t }); wake(); };
+  /** 강사가 상태를 바꿈(쪽을 넘김) */
+  const bump = () => { st.updatedAt = tick(); st.slide = (st.slide || 0) + 1; wake(); };
   const reals = () => log.filter((x) => x.p === '/snapshot' && x.wait);
   return {
-    opt, fetch, log, push, reals,
+    opt, fetch, log, push, bump, reals,
     /** 긴 대기의 기다림들 */
     waits: () => reals().map((x) => x.wait), snaps: () => log.filter((x) => x.p === '/snapshot'),
     /** 긴 대기 하나가 지금 붙잡혀 있는지 */
@@ -439,4 +443,92 @@ test('서버: 긴 대기는 전과 같다 — 청한 만큼만 붙잡고 바뀌�
   await sleep(300); await A.call('POST', '/questions', { token: me.token, body: { text: '둘째 질문' } });
   const r2 = await lp;
   assert.ok(Date.now() - t0 < 2000); assert.equal(r2.body.questions.length, 1); assert.equal(r2.body.probe, undefined);
+});
+
+// ── 강의 당일 점검에서 고친 것(2026-11-24) ─────────────────────────────
+test('긴 대기: 강사가 바꾼 것을 받은 답 뒤에는 쉬는 틈을 다 기다리지 않고 1.5초쯤 뒤에 다시 붙잡는다(값을 치른 것 1분에 4번까지). 참가자 글만 온 답·조용한 때는 평소 쉬는 틈', { timeout: 150000 }, async () => {
+  // 투표 열기 → 결과 공개 → 닫기, 쪽 넘기기처럼 강사의 변화가 이어질 때: 전에는 변화 하나를 받은 뒤 쉬는 틈(6~8초) 동안 다음 변화가 보이지 않았음
+  const REST = 5000, NORMAL = REST * 0.85 - 40;
+  const room = fakeRoom();
+  const { c } = poller(room, { pollMs: REST, waitS: 5 });
+  await c.connect();
+  /** 붙잡힌 긴 대기를 답하게 한 뒤(kind: bump 강사의 변화 · push 참가자 글), 그 답이 온 때부터 다음 긴 대기가 떠날 때까지(ms). after: 붙잡힌 지 이만큼 지난 뒤에 */
+  const gapAfter = async (kind, after = 0) => {
+    assert.ok(await until(() => room.flying(), 30000), '긴 대기가 붙잡혀 있는 때');
+    if (after) await sleep(after);
+    assert.ok(room.flying(), '아직 붙잡혀 있음');
+    const n = room.reals().length; if (kind === 'bump') room.bump(); else room.push('참가자 글 ' + n);
+    assert.ok(await until(() => room.reals().length > n, 30000, 10), '다음 긴 대기');
+    return room.reals()[n].at - room.reals()[n - 1].doneAt;
+  };
+  const quick = (g) => g >= 1100 && g <= 2200;
+  // ① 참가자 글만 온 답 뒤에는 평소 쉬는 틈(방이 떠들썩해도 요청이 늘지 않음)
+  const g0 = await gapAfter('push');
+  assert.ok(g0 >= NORMAL, `참가자 글 뒤: 평소 쉬는 틈(${g0}ms)`);
+  // ② 띄엄띄엄 넘기는 쪽(다시 붙잡은 뒤 쉬는 틈보다 오래 지나 바뀜): 늘 1.5초 뒤에 다시 붙잡고, 몫을 쓰지 않음(어차피 보냈을 요청)
+  const slow = [];
+  for (let i = 0; i < 5; i++) slow.push(await gapAfter('bump', 3800)); // eslint-disable-line no-await-in-loop
+  assert.ok(slow.every(quick), `띄엄띄엄 오는 강사의 변화: 다섯 번 모두 1.5초쯤 뒤에 다시(${slow})`);
+  // ③ 몰아서 오는 변화(다시 붙잡자마자 또 바뀜 = 빠르게 다시 붙잡은 요청이 곧바로 답함 = 요청을 하나 더 씀): 그런 요청이 네 번이면 평소 쉬는 틈으로.
+  //    ②의 마지막에 다시 붙잡은 요청부터 세므로 여기서는 세 번까지 빠르고(네 번째 요청이 답한 뒤부터) 그 뒤는 평소대로
+  const fast = [];
+  for (let i = 0; i < 6; i++) fast.push(await gapAfter('bump')); // eslint-disable-line no-await-in-loop
+  assert.ok(fast.slice(0, 3).every(quick), `몰아서 오는 변화: 처음에는 1.5초쯤 뒤에(${fast})`);
+  assert.ok(fast.slice(3).every((g) => g >= NORMAL), `값을 치른 것이 1분에 네 번이면 평소 쉬는 틈(${fast})`);
+  // ④ 조용한 때(끝까지 붙잡았다 빈 답): 평소 쉬는 틈 그대로
+  const n0 = room.reals().length;
+  assert.ok(await until(() => { const r = room.reals(); return r.length >= n0 + 2 && r[n0].done; }, 30000));
+  const held = room.reals()[n0];
+  assert.ok(held.doneAt - held.at >= 4900, `끝까지 붙잡힌 긴 대기(${held.doneAt - held.at}ms)`);
+  assert.ok(room.reals()[n0 + 1].at - held.doneAt >= NORMAL, `빈 답 뒤에는 평소 쉬는 틈(${room.reals()[n0 + 1].at - held.doneAt}ms)`);
+  assert.ok(room.snaps().every((x) => /^\?since=\d+(&wait=5)?$/.test(x.query)), '요청 모양은 그대로(since·wait뿐)');
+  c.close();
+});
+
+test('조용히 죽은 망: 실시간으로 이어진 동안 쓰기가 망 오류로 실패하면 바로 한 번 확인해(소켓 ping) 몇 초 안에 끊긴 것으로 바꾼다. 쓰기가 되는 동안에는 아무것도 더 보내지 않는다', { timeout: 60000 }, async () => {
+  // 소켓은 닫히지 않았는데 아무것도 오가지 않는 망(와이파이가 약해짐·화면을 껐다 켬). 전에는 심장 박동의 60초 침묵 뒤에야 알아채 그동안 '연결됨'이라 말했음
+  let dead = false; const log = []; const socks = []; const posted = [];
+  const fetch = async (url, init = {}) => {
+    const u = new URL(url); const p = u.pathname.replace(/^.*\/api\/[A-Z0-9]+/, ''); const m = init.method || 'GET';
+    log.push(m + ' ' + p);
+    if (dead) throw new TypeError('Failed to fetch');
+    if (p === '/state') return res({ updatedAt: 0 });
+    if (p === '/snapshot') return res({ now: Date.now(), since: 0, full: true, state: { updatedAt: 0 }, questions: [], removed: [] });
+    if (p === '/join') return res({ id: 'p1', token: 'tok-1', nickname: '참가자1' });
+    if (p === '/questions' && m === 'POST') { const b = JSON.parse(init.body); posted.push(b.text); return res({ id: 'q' + log.length, cid: b.cid, text: b.text, createdAt: Date.now(), updatedAt: Date.now() }); }
+    return res({ error: 'not_found' }, { status: 404 });
+  };
+  class WS {
+    constructor() {
+      this.readyState = 0; this.sent = []; socks.push(this);
+      if (!dead) setTimeout(() => { if (this.readyState === 3) return; this.readyState = 1; this.onopen?.(); this.onmessage?.({ data: JSON.stringify({ type: 'hello', now: Date.now(), mode: 'ws', protocol: 1 }) }); }, 5);
+    }
+    send(m) { this.sent.push(m); if (m === 'ping' && !dead) setTimeout(() => this.onmessage?.({ data: 'pong' }), 1); }
+    close() { this.readyState = 3; this.onclose?.(); }
+  }
+  const W = makeWindow({ fetch, WebSocket: WS, EventSource: HangES });
+  const c = wsClient(W);
+  assert.equal((await c.connect()).transport, 'ws');
+  const seen = []; c.on('status', (s) => seen.push([Date.now(), s]));
+  // 잘 될 때: 쓰기를 해도 확인(ping·상태 묻기)을 더 보내지 않음
+  await c.join({ nickname: '가을' });
+  await c.add('questions', { text: '잘 될 때 올린 질문' });
+  await sleep(3500); // 쓰기 뒤 3초(느린 쓰기 확인을 거는 시간)가 지나도 아무것도 더 보내지 않음 + 질문 사이 간격(런타임의 도배 막기 3초)
+  assert.deepEqual(socks[0].sent.filter((m) => m === 'ping'), [], '쓰기가 되는 동안에는 ping을 더 보내지 않음');
+  assert.equal(log.filter((x) => x === 'GET /state').length, 1, '상태 묻기도 처음 한 번뿐: ' + log);
+  // 망이 조용히 죽음: 소켓은 열린 채, 요청은 실패
+  dead = true; const t0 = Date.now();
+  const q = await c.add('questions', { text: '끊긴 동안 올린 질문' });
+  assert.ok(q && (q._pending || q.queued), '보내지 못한 글은 대기열에');
+  assert.ok(await until(() => c.netInfo().status !== 'live', 9000), '몇 초 안에 연결됨이 아니게 됨');
+  const took = Date.now() - t0;
+  assert.ok(took < 9000, `쓰기 실패 뒤 ${took}ms(전에는 60초 넘게 '연결됨')`);
+  assert.equal(socks[0].sent.filter((m) => m === 'ping').length, 1, '확인은 ping 한 번');
+  assert.ok(await until(() => c.netInfo().status === 'offline', 20000), `다시 이어 보다 안 되면 끊김으로: ${seen.map((x) => x[1])}`);
+  // 망이 돌아오면 다시 이어지고 대기열의 글이 감
+  dead = false;
+  assert.ok(await until(() => c.netInfo().status === 'live', 25000), '다시 이어짐');
+  assert.ok(await until(() => posted.includes('끊긴 동안 올린 질문'), 15000), '대기열의 글을 보냄: ' + posted);
+  assert.equal(posted.filter((t) => t === '끊긴 동안 올린 질문').length, 1, '한 번만');
+  c.close();
 });

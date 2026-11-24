@@ -196,7 +196,7 @@ test('개인정보 안내: 바로 배포 서버가 참여 기록을 맡으면 �
   assert.match(self('https://lec.teacher.workers.dev')['privacy.html'], /Cloudflare, Inc\./);
   // 참여하기 동의: 이름·소속은 입실 때만 받으니 동의하지 않아도 질문·투표는 그대로
   const idx = self('https://live.school.kr')['index.html'];
-  assert.match(idx, /이름·소속을 출석 확인에만 쓰고 마지막 기록 뒤 14일 안에 지우는 데 동의합니다\. 동의하지 않으면 입실 기록만 남지 않아요\(질문·투표는 그대로\)/);
+  assert.match(idx, /이름·소속을 출석 확인에만 쓰고 마지막 기록 뒤 14일 안에 지우는 데 동의합니다\. 동의하지 않으면 출석 기록만 남지 않아요\(질문·투표는 그대로\)/);
   assert.doesNotMatch(idx, /참여 기능을 쓸 수 없어요/);
 });
 

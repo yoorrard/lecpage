@@ -146,6 +146,13 @@ export function ImageDialog({ n, p, onClose, onPick }) {
 /** 꼭 고칠 곳: 배포에서 막히거나 화면·링크가 깨지는 문제만(글자 대비·제목 같은 작은 것은 뺌) */
 const MINOR = /^(contrast|invisible-text|title|viewport)$/;
 export const seriousOf = (issues) => (issues || []).filter((x) => x.level === 'error' && !MINOR.test(String(x.id || '')));
+/**
+ * 꼭 고칠 곳의 한 줄 요약에 보일 말: 검수 문구에서 개발자용 정보(괄호 속 CSS 선택자 'section#hero > div.wrap > img', 픽셀 수 '1114px')를 뺌.
+ * 파일 이름(material/p-001.webp, files/…)은 강사가 알아볼 수 있으니 둠. 온전한 문구는 [자세히 보기]와 AI에게 보내는 글에 그대로
+ */
+const FILE_NAME = /\.(html?|css|m?js|json|png|jpe?g|webp|gif|svg|avif|pdf|txt|hwpx?|pptx?|docx?|xlsx?|zip|woff2?|mp[34])\b/i;
+const looksCss = (s) => !FILE_NAME.test(s) && /\s>\s|[\w\])]#[\w-]|^#[\w-]|^[a-z][a-z0-9]*[.#[]|^\.[a-z_-]/i.test(s.trim());
+export const plainIssue = (m) => String(m || '').replace(/\s*\(([^()]*)\)/g, (all, inner) => (looksCss(inner) || /\dpx\b/.test(inner) ? '' : all)).replace(/\s?\d+(\.\d+)?px(?![\w-])/g, '').replace(/\s+([.,])/g, '$1').trim();
 /** 꼭 고칠 곳 한 줄: [AI로 수정]과 접은 목록(이 곳 보기) */
 export function IssueLine({ issues, onFix, onShow, locked, flash }) {
   if (!issues.length) return null;
@@ -153,7 +160,7 @@ export function IssueLine({ issues, onFix, onShow, locked, flash }) {
   return (
     <div class={`st-issue${flash ? ' is-flash' : ''}`} id="st-issue" role="alert">
       <div class="st-issue-row">
-        <span class="st-issue-t"><b>꼭 고칠 곳 {n}곳</b><small>{issues[0].message_ko}{n > 1 ? ` 외 ${n - 1}곳` : ''}</small></span>
+        <span class="st-issue-t"><b>꼭 고칠 곳 {n}곳</b><small>{plainIssue(issues[0].message_ko)}{n > 1 ? ` 외 ${n - 1}곳` : ''}</small></span>
         <button type="button" class="btn btn-sm btn-primary" disabled={locked} onClick={onFix}>AI로 수정</button>
       </div>
       <details class="st-issue-more"><summary class="small">자세히 보기</summary>

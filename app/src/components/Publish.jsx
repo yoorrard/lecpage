@@ -196,6 +196,8 @@ export function Publish({ p, busy, setBusy, prog, setProg, buildFiles, guard, do
   const [connectedAll, setConnected] = useState([]); // 토큰이 있는 곳 + 커넥트로 써 본 곳(커넥트가 켜져 있는지는 아래 connected에서 거름)
   const [instant, setInstant] = useState(null);
   const [instantOff, setInstantOff] = useState(null); // 바로 배포를 지금 못 쓰는 까닭 { t, next? }(자리가 참·닿지 않음)
+  // 바로 배포를 끝내지 못한 까닭 { t, how, final?, net? }: 배포하다 인터넷이 끊기면 이 칸이 ZIP 안내로 바뀌었다가 돌아오므로(카드가 다시 그려짐) 여기서 쥐고 있음
+  const [instantFail, setInstantFail] = useState(null);
   // 이 기기의 오늘 남은 새 사이트 몫(모르면 null). 서버가 횟수를 새로 세기 시작했으면(quota가 바뀜) 적어 둔 몫은 버림
   const share = useMemo(() => instantShare(Date.now(), instant ? instant.quota : undefined), [instant]);
   // 인터넷이 끊겼으면(오프라인) 되는 길(사이트 파일 받기)만. 다시 이어지면 바로 배포 서버에 다시 물음
@@ -213,6 +215,10 @@ export function Publish({ p, busy, setBusy, prog, setProg, buildFiles, guard, do
   useEffect(() => {
     let off = false;
     connectedTargets().then((c) => { if (!off) setConnected(c); });
+    // 끊긴 동안에는 서버에 묻지 않음: 물어도 실패라 '이 망에서 닿지 않아요'로 바뀌고 배포할 곳이 다른 곳으로 넘어감(배포가 도는 중에 끊기면 누를 곳이 눈앞에서 바뀜).
+    // 받아 둔 답은 그대로 두고, 다시 이어지면 물음(답을 받은 적이 없으면 그때까지 '확인하는 중')
+    if (!online) { setInfoWait(false); return () => { off = true; }; }
+    if (instant === null && PUBLISH_API) setInfoWait(true);
     const t = setTimeout(() => { if (!off) setInfoWait(false); }, 8500);
     // false: 바로 배포를 켠 앱인데 이 망에서 서버에 닿지 않음
     instantInfo(!first.current).then((i) => { if (off) return; setInstant(i || (PUBLISH_API ? false : null)); setInfoWait(false); clearTimeout(t); });
@@ -344,7 +350,7 @@ export function Publish({ p, busy, setBusy, prog, setProg, buildFiles, guard, do
   if (offline) {
     return (
       <div class="stack publish">
-        <p class="small net-line" role="status">인터넷이 끊겨 있어요. 연결되면 배포할 수 있어요. 지금은 사이트 파일(ZIP)만 받을 수 있어요.</p>
+        <p class="small net-line" role="status">{instantFail?.net ? '배포하는 중에 인터넷이 끊겼어요. 다시 연결되면 [다시 배포]를 눌러요. 올린 데부터 이어서 해요.' : '인터넷이 끊겨 있어요. 연결되면 배포할 수 있어요.'} 지금은 사이트 파일(ZIP)만 받을 수 있어요.</p>
         <Manual {...ctx} guard={guard} zip={zip} kind="zip" key="zip" />
         {prog && <div class="stack pub-prog" tabIndex={-1}><Progress pct={prog.pct} /><span class="small muted" aria-live="polite">{prog.step}</span></div>}
       </div>
@@ -395,7 +401,7 @@ export function Publish({ p, busy, setBusy, prog, setProg, buildFiles, guard, do
       {moved && <p class="small net-line" role="status">{moved}</p>}
       {instant === false && !instantWhy && <p class="small muted net-line">이 망에서 바로 배포 서버에 닿지 않아요. 휴대폰 핫스팟으로 바꾸면 쓸 수 있어요.</p>}
       {netBad[target] && !moved && <p class="small net-line" role="status">이 망에서 {LABEL[target]}에 닿지 않아요. 배포하다 멈출 수 있어요. 휴대폰 핫스팟으로 바꾸거나 다른 곳을 골라 주세요.</p>}
-      {target === 'lecpage' && <Instant {...ctx} info={instant} gate={gate} freshRoom={freshRoom} onTry={onTry} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
+      {target === 'lecpage' && <Instant {...ctx} info={instant} gate={gate} freshRoom={freshRoom} onTry={onTry} failed={instantFail} setFailed={setInstantFail} onUnavailable={(why) => { setInstantOff(why); setPicked(''); }} />}
       {cancel && <Undeploy p={p} target={cancel} info={instant} records={records} done={done} onClose={closeCancel} />}
       {target === 'vercel' && <Vercel {...ctx} vcWay={vcWay} />}
       {target === 'github-pages' && <GitHub {...ctx} />}
@@ -555,10 +561,10 @@ function Undeploy({ p, target, info, records, done, onClose }) {
 // 다시 해도 같은 답인 거절(hosting: 413 too_large·too_many_files, 400 bad_path·bad_type, blocked). 까닭은 서버 문구 그대로
 const FINAL_REFUSAL = ['too_large', 'too_many_files', 'bad_path', 'bad_type', 'blocked'];
 /** lecpage 바로 배포: 가입·토큰 없이. 운영자가 켜 둔 앱에서만. 참여 기능도 서버가 받으면 따로 연결할 것 없이 함께 켜짐 */
-function Instant({ p, busy, start, done, bind, info, gate, freshRoom, onUnavailable, onTry }) {
+function Instant({ p, busy, start, done, bind, info, gate, freshRoom, onUnavailable, onTry, failed, setFailed }) {
   const prev = p.deploy?.lecpage;
   const [refused, setRefused] = useState(null); // 바로 배포가 거절한 까닭 { t: 서버 문구 그대로, pre: 올리기 전에 미리 본 것 }
-  const [failed, setFailed] = useState(null); // 배포를 끝내지 못함 { t: 까닭, how: 할 일 }(까닭을 화면에 남기고 [다시 배포]로 이어 감)
+  // failed(부모가 쥠): 배포를 끝내지 못함 { t: 까닭, how: 할 일, net: 연결이 끊김 }(까닭을 화면에 남기고 [다시 배포]로 이어 감. 인터넷이 끊겨 이 카드가 사라졌다 돌아와도 남음)
   // 방문이 있으면 서버가 보관 기간을 늘리므로, 저장해 둔 날짜가 지났어도 배포한 적이 있으면 '있는 사이트'로 봄(지워졌으면 배포할 때 새 주소로 만듦)
   const alive = !!(prev?.id && prev.expiresAt);
   const bp = deployView(p);
@@ -609,7 +615,8 @@ function Instant({ p, busy, start, done, bind, info, gate, freshRoom, onUnavaila
     // 다시 해도 같은 거절(사이트가 너무 큼·파일이 너무 많음·받지 않는 경로나 형식·막힌 내용): 서버 문구만 보이고 [다른 곳에 배포]로
     if (e.status === 413 || FINAL_REFUSAL.includes(e.code)) { setFailed({ t: e.message || '바로 배포가 이 사이트를 받지 않았어요.', how: '', final: true }); return true; }
     const again = '[다시 배포]를 누르면 올린 데부터 이어서 해요.';
-    setFailed(e.status === 0 ? { t: e.message, how: e.blocked ? '' : `인터넷이 다시 연결되면 ${again}` }
+    // 연결이 끊김(올리는 중에 인터넷이 끊기거나 서버에 닿지 못함): 그 사실과, 다시 연결되면 [다시 배포]가 이어서 한다는 것만. 다른 곳으로 넘기지 않음
+    setFailed(e.status === 0 ? (e.blocked ? { t: e.message, how: '' } : { t: '배포하는 중에 연결이 끊겼어요.', how: `인터넷이 다시 연결된 뒤 ${again}`, net: true })
       : e.status >= 500 ? { t: '바로 배포 서버가 지금 응답하지 못해 배포가 멈췄어요.', how: `잠시 뒤 ${again}` }
       : e.code === 'missing_blobs' ? { t: '파일을 다 올리지 못했어요.', how: again }
       : e.code === 'runtime_mismatch' ? { t: e.message, how: '' }

@@ -9,12 +9,17 @@ import { startGeneration, stopGeneration } from './studio.js';
 
 /** 체험 연수를 새로 만들어 엶(예전 체험 연수는 지움) */
 export async function openDemo() {
-  const { DEMO_FILE } = await import('../data/demo-run.js');
+  const { DEMO_FILE, DEMO_SITE_FILES } = await import('../data/demo-run.js');
   for (const p of await projects.all()) if (p.demo) { stopGeneration(p.id); await projects.remove(p.id).catch(() => { }); }
   const r = await fetch(DEMO_FILE.url); if (!r.ok) throw new Error('demo file');
   const bytes = new Uint8Array(await r.arrayBuffer());
   const id = uid(10); const key = 'src/demo.pdf';
   await blobs.put(id, key, bytes);
+  // 사이트가 가리키는 자료 파일(files/…)을 사이트 파일로 넣어 둠: 미리 만든 AI 답에는 글 파일만 있어, 없으면 링크가 끊겨 꼭 고칠 곳으로 뜸
+  for (const f of DEMO_SITE_FILES || []) {
+    const v = await fetch(f.url).then((x) => (x.ok ? x.arrayBuffer() : null), () => null);
+    if (v) await blobs.put(id, 'site/' + f.path, new Uint8Array(v));
+  }
   await projects.put({ id, demo: true, title: '체험 연수', step: 1, stage: 1, createdAt: Date.now(), info: { ...DEFAULT_INFO }, deploy: {},
     files: [{ name: DEMO_FILE.name, key, size: bytes.length, ext: 'pdf', pages: 0, errors: [], pending: true }] });
   return id;

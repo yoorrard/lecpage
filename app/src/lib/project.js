@@ -150,7 +150,7 @@ export async function openSavedFile(file) {
   if (p.reopened) return '이미 연 파일이라 그때 연 연수를 다시 열었어요. 하나 더 만들려면 처음 화면에서 [복제]를 눌러요.';
   if (p.origin === 'skill') return 'AI 에이전트에서 만든 연수를 열었어요.';
   if (p.carryPending) return '저장한 파일을 열었어요. 배포하기에서 같은 주소로 배포할 수 있어요.';
-  if (p.pastDeploy) return '저장한 파일을 열었어요. 이 파일에는 배포 열쇠가 없어서, 여기서 배포하면 새 주소가 생겨요.';
+  if (p.pastDeploy) return '저장한 파일을 열었어요. 이 파일에는 관리자 키가 없어서, 여기서 배포하면 새 주소가 생겨요.';
   return '저장한 파일을 열었어요.';
 }
 export const OPEN_FAIL = '파일을 열지 못했어요. lecpage에서 저장한 .lecpage 파일인지 확인해 주세요.';

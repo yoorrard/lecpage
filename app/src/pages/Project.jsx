@@ -114,7 +114,7 @@ export function Project({ id, step }) {
     setSaveAsk(false);
     let z; try { z = await exportProjectFile(p, { withKeys: keys }); } catch (e) { console.error(e); toast(e?.friendly ? e.message : '파일로 저장하지 못했어요. 저장 공간을 확인하고 다시 눌러 주세요.'); return; }
     saveFile(safeName(p.title) + '.lecpage', z, 'application/zip');
-    toast(keys ? '열쇠까지 담아 저장했어요. 다른 기기에서 열면 같은 주소에 이어 배포해요.' : '연수를 파일로 저장했어요. 다른 컴퓨터에서 [저장한 파일 열기]로 열어요.');
+    toast(keys ? '관리자 키까지 담아 저장했어요. 다른 기기에서 열면 같은 주소에 이어 배포해요.' : '연수를 파일로 저장했어요. 다른 컴퓨터에서 [저장한 파일 열기]로 열어요.');
   }
   /** [파일로 저장]: 배포한 연수면 열쇠를 담을지 먼저 물음 */
   const askSave = () => (p.deploy?.lastUrl ? (setWithKeys(false), setSaveAsk(true)) : saveProjectFile());
@@ -123,7 +123,7 @@ export function Project({ id, step }) {
     <div class={`wiz stage-${s}${wide ? " is-studio" : ""}`}>
       {p.demo && <DemoBar pid={id} />}
       <header class="wiz-head">
-        <p class="wiz-title" title={p.title || '새 연수'}>{p.title || '새 연수'}</p>
+        <p class="wiz-title" title={p.title || '이름 없는 연수'}>{p.title || '이름 없는 연수'}</p>
         <ol class="stepper" aria-label="만드는 순서">
           {STEPS.map((x) => (
             <li><a href={`#/p/${id}/${x.n}`} class={done(x.n) && x.n !== s ? 'done' : ''} aria-current={x.n === s ? 'step' : undefined} aria-disabled={!open(x.n) ? 'true' : undefined} onClick={(e) => { if (!open(x.n)) { e.preventDefault(); toast(closed(x.n)); } }}><span class="n">{x.n}</span><span class="t">{x.name}</span></a></li>
@@ -148,8 +148,8 @@ export function Project({ id, step }) {
       </header>
       <Dialog open={saveAsk} onClose={() => setSaveAsk(false)} label="파일로 저장">
         <h2 class="h-sub">파일로 저장</h2>
-        <p>다른 컴퓨터에서 [저장한 파일 열기]로 열어 이어서 고쳐요. 기본 파일에는 배포 열쇠가 없어서 남에게 줘도 되고, 그 파일로 배포하면 새 주소가 생겨요.</p>
-        <label class="check"><input type="checkbox" checked={withKeys} onChange={(e) => setWithKeys(e.target.checked)} /><span>내 다른 기기에서 같은 주소로 이어 배포하기{withKeys && <small class="err"> 사이트 열쇠·강사 화면 관리자 키가 파일에 들어가요. 이 파일은 남에게 주지 마세요.</small>}</span></label>
+        <p>다른 컴퓨터에서 [저장한 파일 열기]로 열어 이어서 고쳐요. 기본 파일에는 관리자 키가 없어서 남에게 줘도 되고, 그 파일로 배포하면 새 주소가 생겨요.</p>
+        <label class="check"><input type="checkbox" checked={withKeys} onChange={(e) => setWithKeys(e.target.checked)} /><span>내 다른 기기에서 같은 주소로 이어 배포하기{withKeys && <small class="err"> 관리자 키가 파일에 들어가요. 이 파일은 남에게 주지 마세요.</small>}</span></label>
         <div class="btn-row"><button class="btn btn-primary" data-autofocus onClick={() => saveProjectFile(withKeys)}>저장</button><button class="btn btn-quiet" onClick={() => setSaveAsk(false)}>닫기</button></div>
       </Dialog>
       <div class="wiz-main">{legacy && s > 1 ? <LegacyNote p={p} go={go} /> : <cur.C key={gen} {...ctx} />}</div>

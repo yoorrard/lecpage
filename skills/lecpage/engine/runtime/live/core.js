@@ -834,8 +834,9 @@
       case 'status': this._setStatus(evt.status); if (evt.mode) this.mode = evt.mode; break;
       case 'resync': return this.sync(!!evt.full);
       case 'hello': if (evt.now) this._skew = evt.now - Date.now(); break;
-      // 어댑터가 따로 받은 묻기 결과(긴 대기): 동기화 차례(_syncing)를 붙잡지 않고 바로 합침 → { changes }
-      case 'snapshot': return { changes: this._applySnapshot(evt.doc, false) };
+      // 어댑터가 따로 받은 묻기 결과(긴 대기): 동기화 차례(_syncing)를 붙잡지 않고 바로 합침 → { changes, state }
+      // state: 강사가 바꾼 상태(쪽·투표 열기/공개/닫기·타이머·공지)가 실려 왔나 — 어댑터가 이런 답 뒤에는 쉬는 틈을 줄여 곧 다시 붙잡음
+      case 'snapshot': { var st0 = this._state; var nch = this._applySnapshot(evt.doc, false); return { changes: nch, state: this._state !== st0 }; }
       // 묻기 방식이 바뀜(실시간 ↔ 긴 대기 ↔ 간격 묻기, 간격 권고): 강사 화면이 '묻기 방식'을 다시 그림
       case 'net': this._bus.emit('net', this.netInfo()); break;
       case 'error': this.lastError = evt.error; this._bus.emit('error', evt.error); break;
@@ -877,6 +878,9 @@
   };
   C._ensureJoined = function () {
     if (this._me && this._me.token) return Promise.resolve(this._me);
+    // 관리자 키로 연 화면(강사·발표 화면)은 저절로 참가자로 등록하지 않음(관리자 권한으로 그대로 보냄).
+    // 등록하면 참가자 수·명단·이수자 명단에 '참가자NNN' 유령 줄이 생김(즉석 투표를 닫을 때 그랬음)
+    if (this._adminKey) return Promise.resolve(null);
     var p = local.get('lecLive:profile') || {};
     return this.join({ nickname: this.config.nickname || p.nickname || '' });
   };
@@ -1189,7 +1193,8 @@
   };
   C.update = function (col, id, patch) {
     var op = { op: 'update', col: col, id: id, patch: this._prepare(col, patch || {}), at: Date.now() };
-    var mine = this._me && (this.get(col, id) || {}).by === this._me.id || (this._mine[col] || {})[id] || (col === 'participants' && this._me && id === this._me.id);
+    // 내 것: 참가자로 참여한 화면이 제가 쓴 글·제 기록을 고칠 때만. 참여하지 않은 관리자 화면이 만든 것(즉석 투표·손으로 더한 참가자)은 관리자로 고침
+    var mine = !!this._me && ((this.get(col, id) || {}).by === this._me.id || !!(this._mine[col] || {})[id] || (col === 'participants' && id === this._me.id));
     if (this._adminKey && !mine) { op.admin = true; return this._exec(op); }
     return this._write(op);
   };

@@ -874,6 +874,12 @@ ol.flow{--g:28px;list-style:none;margin:4px 0;padding:0;display:grid;grid-templa
 /* 세 카드: 같은 크기·같은 위계로 한 줄(좁으면 세 줄) */
 .ai-cards{display:grid;gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}
 @media (max-width:760px){.ai-cards{grid-template-columns:minmax(0,1fr)}}
+/* 연결해 둔 API 키 카드를 맨 위로 올림(이 화면에서 누를 큰 버튼) · 휴대폰: 구독은 PC에서 한다는 한 줄 + API 키 버튼 */
+.ai-cards-main{grid-template-columns:minmax(0,1fr)}
+.ai-cards-main .ai-card{border-width:1.5px;border-color:color-mix(in srgb,var(--accent) 55%,var(--line))}
+.ai-cards-main .ai-card-go{width:auto;justify-self:start}
+.ai-phone{display:grid;gap:10px}
+.ai-phone p{margin:0}
 .ai-card{display:grid;grid-template-rows:auto 1fr auto auto;gap:10px;padding:16px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--paper);min-width:0}
 .ai-card.is-on{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
 .ai-card.is-open{box-shadow:0 0 0 2px var(--accent)}

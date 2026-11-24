@@ -22,7 +22,8 @@ export function dayLine(st, date) {
   if (isPastDate(date)) return { k: 'past', t: `${md(date)}은 이미 지난 날짜예요. 연수 날짜가 맞는지 확인해 주세요.` };
   const d = st?.day; if (!d) return null;
   if (!d.budget) return { k: 'ok', t: `${md(date)}: 바로 배포 서버에 하루 한도가 없어요.` };
-  const head = `${md(date)} 바로 배포 예약: 연수 ${d.trainings || 0}개 · 참가자 ${d.people || 0}명`;
+  // 그날 바로 배포 서버에 예약된 연수 수(모든 강사 합쳐). 참가자 수는 적지 않음: 인원을 적지 않은 연수는 어림값으로 세어, 강사가 넣은 숫자처럼 보임
+  const head = `${md(date)} 바로 배포 예약(모든 강사 합쳐): 연수 ${d.trainings || 0}개`;
   if (!d.ok) return { k: 'full', t: `${head}. 그날 참여 기능 자리가 찼어요. 지금 배포하면 만들 때 알려 줘요. 내 계정에 배포하면 붐벼도 상관없어요.` };
   if (d.pct >= 50) return { k: 'tight', t: `${head}. 그날 참여 기능 자리가 빠듯해요(하루 몫의 ${d.pct}%). 사이트는 붐벼도 열려요.` };
   return { k: 'ok', t: `${head}. 여유 있어요.` };

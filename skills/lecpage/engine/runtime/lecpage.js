@@ -508,9 +508,12 @@
   }
 
   /* ── 연수 전·중·후: 끝난 뒤에는 '연수 후 안내'를 첫 화면 아래로 올리고 회의 입장 버튼을 숨김(?phase=after로 미리 보기) ──
-     열어 둔 화면도 시각이 지나면 바뀌게 30초마다(그리고 화면으로 돌아올 때) 다시 셈. 단계가 바뀌면 'lp:phase' 알림(참여 기능이 도크·출석·'지금' 줄을 맞춤) */
+     열어 둔 화면도 시각이 지나면 바뀌게 30초마다(그리고 화면으로 돌아올 때) 다시 셈. 단계가 바뀌면 'lp:phase' 알림(참여 기능이 도크·출석·'지금' 줄을 맞춤).
+     출석·참여 막대·'지금' 줄·'종료' 줄은 끝 시각이 아니라 그 2시간 뒤('closed')에 닫음 */
   // 앱 미리보기(한 장 HTML)는 주소에 ?phase를 붙일 수 없어 <html data-lp-phase>로 받음(예: 먼저 해보기의 지난 날짜 견본을 '연수 전'으로)
   var PHASE_Q = /[?&]phase=(before|during|after)\b/.exec(location.search) || /^(before|during|after)$/.exec(doc.documentElement.getAttribute('data-lp-phase') || '');
+  // 끝 시각을 넘겨 진행하는 강의: 그날 끝 시각 뒤 이만큼은 출석(입실·퇴실)·참여 막대·'지금' 줄을 그대로 둠
+  var LIVE_GRACE = 2 * 3600000;
   /** 지금 단계와 오늘의 연수 시간(여러 날이면 그날, 없으면 다음 날) */
   function phaseNow() {
     var w = DATA.phase; if (!w || !w.end) return null;
@@ -522,16 +525,21 @@
       if (!next && now < s) next = days[i];
     }
     var phase = PHASE_Q ? PHASE_Q[1] : now > new Date(w.end) ? 'after' : now >= new Date(w.start) ? 'during' : 'before';
-    return { phase: phase, day: cur, next: next, w: w };
+    // closed: 참여(출석·참여 막대·'지금' 줄)를 닫는 때. 강의가 끝 시각을 넘겨 이어져도 끊기지 않게 마지막 날 끝 시각 뒤 LIVE_GRACE까지는 열어 둠
+    // (연수 후 안내는 예정 끝 시각에 바뀜). 미리 보기(?phase=after)는 바로 닫힌 모습
+    var closed = PHASE_Q ? phase === 'after' : now > new Date(+new Date(w.end) + LIVE_GRACE);
+    return { phase: phase, closed: closed, day: cur, next: next, w: w };
   }
-  /** 출석을 받는 때: 오늘 연수 시작 30분 전부터 끝날 때까지(미리 보기 ?phase=during이면 늘) */
+  /** 출석을 받는 때: 그날 연수 시작 30분 전부터 끝 시각 뒤 2시간까지(미리 보기 ?phase=during이면 늘) */
   function attendWindow() {
-    var p = phaseNow(); if (!p || p.phase === 'after') return false;
+    var p = phaseNow(); if (!p || p.closed) return false;
     if (PHASE_Q) return p.phase === 'during';
     var w = p.w, days = w.days && w.days.length ? w.days : [{ start: w.start, end: w.end }], now = new Date();
-    return days.some(function (d) { return now >= new Date(new Date(d.start) - 30 * 60000) && now <= new Date(d.end); });
+    return days.some(function (d) { return now >= new Date(new Date(d.start) - 30 * 60000) && now <= new Date(+new Date(d.end) + LIVE_GRACE); });
   }
-  var phaseShown = '';
+  var phaseShown = '', closedShown = false;
+  /** 참여를 닫았나(끝 시각 + 2시간 뒤, 또는 ?phase=after) */
+  function liveClosed() { return closedShown; }
   function initPhase() {
     if (!DATA.phase || !DATA.phase.end) return;
     applyPhase();
@@ -543,14 +551,26 @@
   function applyPhase() {
     var p = phaseNow(); if (!p) return;
     heroState(p);
-    if (p.phase === phaseShown) { doc.dispatchEvent(new CustomEvent('lp:tick', { detail: p.phase })); return; }
-    var first = !phaseShown; phaseShown = p.phase;
-    root.setAttribute('data-phase', p.phase);
-    if (p.phase === 'after') {
-      $$('[data-phase-hide="after"]').forEach(function (n) { n.hidden = true; });
-      $$('[data-phase-show="after"]').forEach(function (n) { n.hidden = false; });
-      var fu = $('[data-followup]'), hero = $('main > .lp-hero');
-      if (fu && hero) { var at = hero.nextElementSibling; if (at && at.classList.contains('lp-divider')) at = at.nextElementSibling; if (at !== fu) hero.parentNode.insertBefore(fu, at); }
+    var phaseNew = p.phase !== phaseShown, closeNew = p.closed && !closedShown;
+    if (!phaseNew && !closeNew) { doc.dispatchEvent(new CustomEvent('lp:tick', { detail: p.phase })); return; }
+    var first = !phaseShown;
+    // 출석 칸([data-attend]) 안의 것은 참여를 닫을 때 바꿈(끝 시각을 넘겨 진행해도 [퇴실 확인]이 남게). 그 밖(연수 후 안내·회의 입장)은 예정 끝 시각에
+    var inAttend = function (n) { return !!n.closest('[data-attend]'); };
+    if (phaseNew) {
+      phaseShown = p.phase;
+      root.setAttribute('data-phase', p.phase);
+      if (p.phase === 'after') {
+        $$('[data-phase-hide="after"]').forEach(function (n) { if (!inAttend(n)) n.hidden = true; });
+        $$('[data-phase-show="after"]').forEach(function (n) { if (!inAttend(n)) n.hidden = false; });
+        var fu = $('[data-followup]'), hero = $('main > .lp-hero');
+        if (fu && hero) { var at = hero.nextElementSibling; if (at && at.classList.contains('lp-divider')) at = at.nextElementSibling; if (at !== fu) hero.parentNode.insertBefore(fu, at); }
+      }
+    }
+    if (closeNew) {
+      closedShown = true;
+      root.setAttribute('data-lp-closed', '');
+      $$('[data-phase-hide="after"]').forEach(function (n) { if (inAttend(n)) n.hidden = true; });
+      $$('[data-phase-show="after"]').forEach(function (n) { if (inAttend(n)) n.hidden = false; });
       var bar = $('[data-phase-bar]');
       if (bar) {
         // 키트 사이트: '종료' 줄이 키트 상자(.lpk) 밖에 있으면(사이트가 옮겼거나 조립 결과를 다시 쓴 경우) 키트 줄 상자에 넣어 모양을 갖춤
@@ -558,7 +578,10 @@
         bar.hidden = false; fitScrollPad();
       }
     }
-    if (!first) doc.dispatchEvent(new CustomEvent('lp:phase', { detail: p.phase }));
+    if (first) return;
+    if (phaseNew) doc.dispatchEvent(new CustomEvent('lp:phase', { detail: p.phase }));
+    // 'closed': 참여를 닫음(참여 기능이 도크·출석·'지금' 줄을 내림)
+    if (closeNew) doc.dispatchEvent(new CustomEvent('lp:phase', { detail: 'closed' }));
   }
 
   // 첫 화면 한 줄: 연수 전 '시작까지 3일'(이틀 안쪽이면 시간·분), 연수 중 '지금 진행 중'(여러 날이면 쉬는 날에는 '다음 …'), 끝나면 '끝난 연수'
@@ -632,7 +655,8 @@
   /* ── 교재 보기 ─────────────────────────── */
   var deckApi = null;
   // 교재 전체 화면: 그 동안에는 교재 요소 안에 든 것만 보이므로 떠 있는 키트 부품('지금' 띠·알림)을 잠시 그 안으로 옮겼다가 끝나면 제자리로
-  var deckFull = false, nowRedraw = null;
+  // deckVis: 교재 그림 칸이 화면 가운데쯤에 보임(그 쪽을 이미 보고 있으면 '지금' 줄이 '교재 N쪽 [N쪽 보기]'를 또 말하지 않게)
+  var deckFull = false, deckVis = false, nowRedraw = null;
   function moveFloats(into) {
     [$('.lpk.lpk-now:not(.lpk-now--placed)'), $('[data-toast]')].forEach(function (n) {
       if (!n) return;
@@ -675,7 +699,9 @@
       $('[data-deck-cur]', deck).textContent = slides[cur].getAttribute('data-page');
       $$('button', thumbs).forEach(function (b, k) { if (k === cur) { b.setAttribute('aria-current', 'true'); if (b.scrollIntoView && !(opt && opt.quiet)) thumbs.scrollTo({ left: b.offsetLeft - thumbs.clientWidth / 2 + 56, behavior: RM ? 'auto' : 'smooth' }); } else b.removeAttribute('aria-current'); });
       [cur + 1, cur + 2].forEach(function (k) { var im = slides[k] && slides[k].querySelector('img'); if (im) im.loading = 'eager'; });
+      if (nowRedraw) nowRedraw(); // 보고 있는 쪽이 바뀜: '지금' 줄의 '교재 N쪽'을 다시 맞춤
     }
+    if ('IntersectionObserver' in window) new IntersectionObserver(function (es) { var v = es[es.length - 1].isIntersecting; if (v !== deckVis) { deckVis = v; if (nowRedraw) nowRedraw(); } }, { rootMargin: '-25% 0px -25% 0px' }).observe(stage);
     $('[data-deck-prev]', deck).addEventListener('click', function () { go(cur - 1); });
     $('[data-deck-next]', deck).addEventListener('click', function () { go(cur + 1); });
     stage.addEventListener('keydown', function (e) { if (e.key === 'ArrowRight' || e.key === 'PageDown') { go(cur + 1); e.preventDefault(); } if (e.key === 'ArrowLeft' || e.key === 'PageUp') { go(cur - 1); e.preventDefault(); } });
@@ -708,12 +734,13 @@
     deckApi = { go: function (page) {
       var i = slides.findIndex(function (s) { return +s.getAttribute('data-page') === +page; }); if (i < 0 || i === cur) return;
       // 쪽만 맞추고 화면은 옮기지 않음(발표 내내 따라 넘기기가 켜져 있어 다른 칸을 읽는 사람을 끌어오지 않게). 교재가 화면 밖이면 '지금' 줄에 [N쪽 보기]
-      // 강사를 따라 넘어간 쪽은 '지금' 줄이 '교재 N쪽'으로 알림 → 쪽 번호 칸은 이때만 조용히(같은 일을 두 번 읽지 않게)
-      var cnt = $('[data-now]') ? $('.lp-deck-count', deck) : null;
+      // 강사를 따라 넘어간 쪽은 '지금' 줄이 '교재 N쪽'으로 알림 → 쪽 번호 칸은 이때만 조용히(같은 일을 두 번 읽지 않게).
+      // 교재를 보고 있으면 '지금' 줄이 말하지 않으니 쪽 번호 칸이 알림
+      var cnt = $('[data-now]') && !deckVis ? $('.lp-deck-count', deck) : null;
       if (cnt) cnt.setAttribute('aria-live', 'off');
       go(i);
       if (cnt) setTimeout(function () { cnt.setAttribute('aria-live', 'polite'); }, 400);
-    }, has: function (page) { return slides.some(function (s) { return +s.getAttribute('data-page') === +page; }); }, follow: function () { var c = $('[data-deck-follow]', deck); return !c || c.checked; }, showFollow: function () { var l = $('.lp-follow', deck); if (l) l.hidden = false; } };
+    }, cur: function () { return +slides[cur].getAttribute('data-page'); }, has: function (page) { return slides.some(function (s) { return +s.getAttribute('data-page') === +page; }); }, follow: function () { var c = $('[data-deck-follow]', deck); return !c || c.checked; }, showFollow: function () { var l = $('.lp-follow', deck); if (l) l.hidden = false; } };
   }
   // 글만 있는 쪽의 작은 미리보기: 쪽 번호 + 제목(표지·부 시작은 큰 슬라이드와 같은 바탕)
   function thumbText(s) {
@@ -767,6 +794,17 @@
       var c = $('[data-st-count]', shell); if (c) c.textContent = done.length + ' / ' + arts.length;
       var p = $('[data-st-progress]', shell); if (p) { p.max = arts.length; p.value = done.length; } // 최대는 단계 수(사이트가 max를 적지 않아도)
     }
+    // 진행 현황에 '하는 중'으로 알림. 키트(스크롤로 지금 단계를 셈)는 그 단계가 화면 가운데에 DWELL만큼 머문 뒤에만:
+    // 다른 칸으로 가느라 지나친 단계(다른 쪽의 [투표하러 가기]로 들어와 투표 칸까지 내려간 때)나 쪽을 열기만 한 첫 단계가 '하는 중'으로 적히지 않게.
+    // 직접 연 것(단계 링크·강사 따라가기)과 한 칸씩 보이는 꼴은 바로
+    var DWELL = 3000, progT = 0, vis = {};
+    function report(i, atOnce) {
+      clearTimeout(progT);
+      if (i < 0 || i >= arts.length) return;
+      var wait = kit && !atOnce && 'IntersectionObserver' in window;
+      var send = function () { if (cur === i && live.ready && (!wait || vis[i])) live.progress(idOf(i), done.indexOf(idOf(i)) >= 0 ? 'done' : 'doing'); };
+      if (wait) progT = setTimeout(send, DWELL); else send();
+    }
     function show(i, scroll) {
       if (i < 0 || i >= arts.length) return;
       cur = i;
@@ -775,7 +813,7 @@
       store.set('last', idOf(i));
       if (scroll && kit) arts[i].scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' });
       else if (scroll && layout !== 'scroll') shell.scrollIntoView({ block: 'start', behavior: RM ? 'auto' : 'smooth' });
-      if (live.ready) live.progress(idOf(i), done.indexOf(idOf(i)) >= 0 ? 'done' : 'doing');
+      report(i, !!scroll);
     }
     function fromHash(scroll) { var m = /^#st-(.+)$/.exec(location.hash); if (!m) return false; var i = arts.findIndex(function (a) { return a.getAttribute('data-st') === decodeURIComponent(m[1]); }); if (i >= 0) { show(i, scroll); return true; } return false; }
     window.addEventListener('hashchange', function () { fromHash(true); });
@@ -811,10 +849,11 @@
     paint();
     // 키트: 화면 가운데를 지나는 단계가 '지금 실습'(진행 현황·도움 요청이 이 단계를 셈)
     if (kit && 'IntersectionObserver' in window) {
-      var sio = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { var i = arts.indexOf(e.target); if (i >= 0 && i !== cur) show(i, false); } }); }, { rootMargin: '-45% 0px -50% 0px' });
+      var sio = new IntersectionObserver(function (es) { es.forEach(function (e) { var i = arts.indexOf(e.target); if (i < 0) return; vis[i] = e.isIntersecting; if (!e.isIntersecting) return; if (i !== cur) show(i, false); else report(i, false); }); }, { rootMargin: '-45% 0px -50% 0px' });
       arts.forEach(function (a) { sio.observe(a); });
     }
-    stApi = { go: function (id) { var i = arts.findIndex(function (a) { return a.getAttribute('data-st') === id; }); if (i >= 0 && i !== cur) { show(i, true); toast('' + HOST_GA + ' 보는 실습으로 이동했어요.'); } }, current: function () { return cur >= 0 ? idOf(cur) : null; }, done: function () { return done.slice(); } };
+    // report: 참여 기능이 이어진 뒤 지금 단계를 알림(키트는 그 단계를 실제로 보고 있을 때만 — 위의 report)
+    stApi = { go: function (id) { var i = arts.findIndex(function (a) { return a.getAttribute('data-st') === id; }); if (i >= 0 && i !== cur) { show(i, true); toast('' + HOST_GA + ' 보는 실습으로 이동했어요.'); } }, current: function () { return cur >= 0 ? idOf(cur) : null; }, done: function () { return done.slice(); }, report: function () { report(cur, false); } };
   }
 
   /* ── 퀴즈·기록 ─────────────────────────── */
@@ -852,7 +891,7 @@
     var dock = $('[data-dock]'), dot = $('[data-live-status]');
     var qs = {}, posts = {}, answers = {}, state = {}, voted = store.get('voted', {});
     var X = LecLive.util.ext, U = LecLive.util;
-    if (dock && root.getAttribute('data-phase') !== 'after') { // 끝난 연수에는 도움 요청·신호 도크를 띄우지 않음
+    if (dock && !liveClosed()) { // 끝난 연수(끝 시각 + 2시간 뒤)에는 도움 요청·신호 도크를 띄우지 않음
       dock.hidden = false; root.classList.add('lp-dock-on');
       // 도크 높이(휴대폰에서는 두 줄이 되기도 함)를 --lp-dock-h로: Tab으로 옮긴 칸이 도크 밑에 숨지 않게 scroll-padding-bottom에 씀(lecpage.css)
       var dockH = function () { root.style.setProperty('--lp-dock-h', dock.offsetHeight + 'px'); };
@@ -871,6 +910,9 @@
     $$('[data-live-off]').forEach(function (n) { n.hidden = true; });
     if (feats.indexOf('help') >= 0) $$('[data-stuck]').forEach(function (b) { b.hidden = false; });
     if (deckApi) deckApi.showFollow();
+    // [강사 따라 넘기기]를 다시 켜면 강사의 다음 넘김을 기다리지 않고 바로 강사가 보는 쪽으로
+    var followBox = $('[data-deck-follow]');
+    if (followBox && deckApi) followBox.addEventListener('change', function () { if (followBox.checked && state.follow && state.slide) deckApi.go(state.slide); drawNow(); });
 
     // 서버에 닿지 않아 이 기기에 쌓아 둔 글(연결되면 보냄): '올렸어요' 대신 '연결되면 보내요'라고 말함(도움 요청과 같은 말)
     function queued(d) { return !!(d && (d._pending || d.queued)); }
@@ -909,10 +951,10 @@
     // 한 사람 한 번은 서버가 이 기기의 참가자 번호로 지킴). 별명은 다른 사람에게 이름이 보이는 보드 글(질문을 실명으로 받는 연수면 질문도)에서만 물음
     var NEED_ID = !!(DATA.privacy && (DATA.privacy.collect || []).some(function (c) { return c === 'name' || c === 'school'; }));
     var named = function () { return !!(me && me.token && me.nickname && !me.auto); };
-    /** o.attend: 입실 확인(이름·소속이 필요하면 받음) · o.nick: 남에게 보이는 별명이 필요함(보드 글) */
+    /** o.attend: 출석 확인('in' 입실 · 'out' 퇴실 — 이름·소속이 필요하면 받음) · o.nick: 남에게 보이는 별명이 필요함(보드 글) */
     function ensureJoin(o) {
       o = o || {};
-      var forId = !!o.attend && NEED_ID, forNick = !!o.nick;
+      var forId = !!o.attend && NEED_ID, forNick = !!o.nick, act = o.attend === 'out' ? '퇴실' : '입실';
       // 서버에 닿지 않는 동안 처음 참여하려 하면 빈 창을 띄우지 않고 그 사실만(이미 참여했으면 보낼 글은 연결되면 보냄)
       if (down && !(me && me.token)) { toast('참여 기능 서버에 지금 닿지 않아요. 교재와 실습은 그대로 쓸 수 있어요.'); return Promise.reject(new Error('cancel')); }
       if (me && me.token && !(forId && !me.named) && !(forNick && !named())) return Promise.resolve(me);
@@ -930,8 +972,8 @@
         var profileOnly = !!(me && me.token) && forId; // 이미 참여함: 이름·소속만 더함
         if (lead && !lead._orig) lead._orig = lead.textContent;
         // 입실: 이름·소속·동의만(별명은 따로 받지 않음 — 이름은 출석 확인에만 쓰고 남에게 보이는 별명은 보드에 글을 쓸 때 정함)
-        if (lead) lead.textContent = forId ? '입실 확인에 쓸 이름' + ($('input[name="school"]', dlg) ? '·소속' : '') + '을 적어 주세요.' : lead._orig;
-        if (go) go.textContent = forId ? '입실' : '참여';
+        if (lead) lead.textContent = forId ? act + ' 확인에 쓸 이름' + ($('input[name="school"]', dlg) ? '·소속' : '') + '을 적어 주세요.' : lead._orig;
+        if (go) go.textContent = forId ? act : '참여';
         // 쓰지 않는 칸은 감추고 꺼 둠(꺼진 칸은 필수 검사와 보내는 값에서 빠짐)
         $$('[data-join-id]', dlg).forEach(function (l) { l.hidden = !forId; $$('input', l).forEach(function (i) { i.disabled = !forId; }); });
         var nl = $('[data-join-nick]', dlg); if (nl) { nl.hidden = forId; nick.disabled = forId; if (!forId && me && me.auto) nick.value = ''; }
@@ -1249,7 +1291,7 @@
     }
 
     // 출석: 입실·퇴실 시각은 이 기기에 적어 두고(여러 날 연수는 날마다) 새로 고침해도 출석 칸에 다시 보여 줌.
-    // [출석](도크·첫 화면 줄)은 연수 시간(그날 시작 30분 전부터 끝까지)에 아직 입실하지 않았을 때만. 시각이 지나면 다시 셈
+    // [출석](도크·첫 화면 줄)은 연수 시간(그날 시작 30분 전부터 끝 시각 뒤 2시간까지)에 아직 입실하지 않았을 때만. 시각이 지나면 다시 셈
     var da = $('[data-dock-attend]'), ha = $('[data-hero-attend]'), gate = da ? da.getAttribute('data-dock-attend') === 'in' : !!ha;
     var multiDay = !!(DATA.phase && DATA.phase.days && DATA.phase.days.length);
     var attKey = function (kind) { return 'att:' + kind + (multiDay ? ':' + ymd(new Date()) : ''); };
@@ -1269,7 +1311,7 @@
       $$('[data-attend-state]').forEach(function (n) { n.textContent = early ? '연수 날은 ' + dayKo(early) + '이에요. 그날 눌러 주세요.' : [tin && '입실 확인 ' + tin, tout && '퇴실 확인 ' + tout].filter(Boolean).join(' · '); });
       $$('button[data-attend="in"]').forEach(function (b) { b.classList.toggle('is-done', !!tin); b.setAttribute('aria-pressed', tin ? 'true' : 'false'); });
       $$('button[data-attend="out"]').forEach(function (b) { b.classList.toggle('is-done', !!tout); b.setAttribute('aria-pressed', tout ? 'true' : 'false'); });
-      var open = root.getAttribute('data-phase') !== 'after' && !tin;
+      var open = !liveClosed() && !tin;
       if (da) da.hidden = !(open && (gate ? attendWindow() : true));
       if (ha) ha.hidden = !(open && attendWindow());
     }
@@ -1280,7 +1322,8 @@
         earlyOk = true;
       }
       var from = doc.activeElement;
-      return ensureJoin({ attend: kind === 'in' }).then(function () { return conn.add('attendance', { kind: kind }); }).then(function () {
+      // 퇴실도 입실과 같은 창(이름·소속·동의)을 거침: 입실하지 않은 사람이 [퇴실 확인]을 눌러 이름 없는 기록이 남지 않게. [나중에]면 아무것도 적지 않음
+      return ensureJoin({ attend: kind === 'out' ? 'out' : 'in' }).then(function () { return conn.add('attendance', { kind: kind }); }).then(function () {
         store.set(attKey(kind), hhmm()); paintAttend();
         toast(kind === 'in' ? (gate ? '입실을 확인했어요.' : '출석했어요. 고마워요.') : '퇴실을 확인했어요.');
         // 누른 [출석] 단추가 사라지면(도크·첫 화면 줄) 초점이 문서 맨 위로 빠지지 않게: 같은 줄의 다음 단추, 없으면 출석 칸의 상태 글
@@ -1300,7 +1343,7 @@
     doc.addEventListener('lp:tick', paintAttend);
     doc.addEventListener('lp:phase', function (e) {
       // 끝난 연수: 도크를 내리고 '지금' 줄(투표·타이머)을 정리
-      if (e.detail === 'after' && dock) { dock.hidden = true; root.classList.remove('lp-dock-on', 'lp-hero-in'); }
+      if (e.detail === 'closed' && dock) { dock.hidden = true; root.classList.remove('lp-dock-on', 'lp-hero-in'); }
       paintAttend(); drawNow();
     });
 
@@ -1434,14 +1477,15 @@
     function drawNow() {
       if (!nowEl) return;
       // 끝난 연수: 남은 공지·타이머·투표 대신 맨 위 '종료' 줄만(initPhase)
-      if (root.getAttribute('data-phase') === 'after') { clearInterval(timerIv); if (!nowEl.hidden) { nowEl.hidden = true; fitScrollPad(); } return; }
+      if (liveClosed()) { clearInterval(timerIv); if (!nowEl.hidden) { nowEl.hidden = true; fitScrollPad(); } return; }
       var main = '', sub = '', where = '', cta = null, sts = DATA.stations || [];
       var p = openPoll(), op = p ? null : pollElsewhere(), fm = freshMat();
       var si = state.step ? sts.map(function (x) { return x.id; }).indexOf(state.step) : -1;
       if (si >= 0 && stApi) {
         where = (si + 1) + '번 실습 · ' + sts[si].name;
         if (stApi.current() !== state.step) cta = { label: (si + 1) + '번 실습 열기', href: '#st-' + state.step };
-      } else if (state.slide > 0 && deckApi && deckApi.has(state.slide)) {
+      } else if (state.slide > 0 && deckApi && deckApi.has(state.slide) && !(deckVis && deckApi.cur() === +state.slide)) {
+        // 교재 그림 칸이 화면에 보이고 이미 그 쪽이면 말하지 않음(투표 칸이 보일 때 [투표하기]를 빼는 것과 같음 — 띠가 교재를 가리지 않게)
         where = '교재 ' + state.slide + '쪽';
         cta = { label: state.slide + '쪽 보기', href: '#deck-p' + state.slide };
       }
@@ -1622,7 +1666,7 @@
       conn.subscribe(onEvent);
       if (conn.on) conn.on('status', function (s) { setStatus(s); });
       loadAll();
-      if (stApi && me) live.progress(stApi.current(), stApi.done().indexOf(stApi.current()) >= 0 ? 'done' : 'doing');
+      if (stApi && me) stApi.report();
     }, function () {
       setStatus('offline');
       // 서버가 되살아나면 core가 차츰 길게 다시 이어 봄: 이어지면 한 줄을 거두고 참여 칸을 채움

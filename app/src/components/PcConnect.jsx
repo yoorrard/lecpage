@@ -24,8 +24,11 @@ export function ConnBadge({ demo = false, hint = true }) {
   return <p class={`conn-badge small${on ? ' is-on' : ''}`} role="status"><span class={on ? 'dot-ok' : 'dot-off'} aria-hidden="true" />{connLine(pc, conn)}{hint && pc.state === 'off' && <span class="muted"> — lecpage 커넥트를 켜 주세요</span>}</p>;
 }
 
-/** 첫째 카드: ChatGPT·Claude 구독으로 연결(API 키 없이, 추천). wait: 교재가 있는데도 만들 수 없는 까닭(읽다가 멈춘 교재) — 없으면 '교재를 넣으면…' */
-export function SubscriptionWay({ p, ready, wait = '', idle, go }) {
+/**
+ * 첫째 카드: ChatGPT·Claude 구독으로 연결(API 키 없이, 추천). wait: 교재가 있는데도 만들 수 없는 까닭(읽다가 멈춘 교재) — 없으면 '교재를 넣으면…'
+ * quiet: 이 화면의 큰 버튼이 다른 곳에 있음(API 키를 이미 연결해 [○○로 만들기]가 맨 위) → 이 카드의 버튼은 강조하지 않음(큰 버튼은 화면에 하나)
+ */
+export function SubscriptionWay({ p, ready, wait = '', idle, go, quiet = false }) {
   const { pc, list } = useConnection({ demo: !!p.demo });
   const [open, setOpen] = useState(false); // lecpage 커넥트 받기 안내
   const [pending, setPending] = useState(''); // 로그인 기다리는 계정: 'chatgpt' | 'claude' | 'codex'(끝나면 바로 만들기)
@@ -121,7 +124,7 @@ export function SubscriptionWay({ p, ready, wait = '', idle, go }) {
     refreshPc();
   }
 
-  const download = <GetConnect onGet={() => setOpen(true)} />;
+  const download = <GetConnect onGet={() => setOpen(true)} main={!quiet} />;
 
   return (
     <article class={`ai-sub${pc.state === 'on' ? ' is-on' : ''}`} aria-labelledby="ai-sub-h">
@@ -132,22 +135,22 @@ export function SubscriptionWay({ p, ready, wait = '', idle, go }) {
         <div class="ai-sub-row">
           <div class="ai-sub-name"><b>ChatGPT 계정</b>{has('chatgpt') ? <span class="small"><span class="dot-ok" aria-hidden="true" /> 연결됨{cg.email ? ` · ${cg.email}` : ''}</span> : <span class="small muted">Plus·Pro 요금제</span>}</div>
           {has('chatgpt') ? <div class="btn-row">
-            <button type="button" class={`btn${main === 'chatgpt' ? ' btn-primary' : ''}`} disabled={!ready && !p.demo} onClick={() => make(list.find((c) => c.id === 'chatgpt'))}>ChatGPT로 만들기</button>
+            <button type="button" class={`btn${main === 'chatgpt' && !quiet ? ' btn-primary' : ''}`} disabled={!ready && !p.demo} onClick={() => make(list.find((c) => c.id === 'chatgpt'))}>ChatGPT로 만들기</button>
             <a class="btn-link small" href={cg.usageUrl || 'https://chatgpt.com/settings/usage'} target="_blank" rel="noopener">사용량 보기<span class="ext" aria-hidden="true">↗</span></a>
             <button type="button" class="btn-link small" onClick={logoutChatgpt}>연결 해제</button>
           </div> : <div class="btn-row">
-            <button type="button" class={`btn${has('claude') ? '' : ' btn-primary'}`} aria-busy={pending === 'chatgpt' ? 'true' : undefined} onClick={loginChatgpt}>ChatGPT 계정으로 로그인</button>
+            <button type="button" class={`btn${has('claude') || quiet ? '' : ' btn-primary'}`} aria-busy={pending === 'chatgpt' ? 'true' : undefined} onClick={loginChatgpt}>ChatGPT 계정으로 로그인</button>
             {pending === 'chatgpt' && <span class="small muted" role="status">열린 창에서 로그인해 주세요. 끝나면 바로 만들기 시작해요.</span>}
             {cg.connected && !cg.plan && <span class="small warn-line">요금제 사용을 허락하지 않았어요. 다시 로그인해 허락해 주세요.</span>}
           </div>}
         </div>
         <div class="ai-sub-row">
           <div class="ai-sub-name"><b>Claude 계정</b>{has('claude') ? <span class="small"><span class="dot-ok" aria-hidden="true" /> 연결됨 · {ag.claude?.from === 'desktop' ? 'Claude 데스크톱 앱' : 'Claude Code'}</span> : <span class="small muted">Pro·Max 요금제</span>}</div>
-          {has('claude') ? <div class="btn-row"><button type="button" class={`btn${main === 'claude' ? ' btn-primary' : ''}`} disabled={!ready && !p.demo} onClick={() => make(list.find((c) => c.id === 'claude'))}>Claude로 만들기</button></div>
+          {has('claude') ? <div class="btn-row"><button type="button" class={`btn${main === 'claude' && !quiet ? ' btn-primary' : ''}`} disabled={!ready && !p.demo} onClick={() => make(list.find((c) => c.id === 'claude'))}>Claude로 만들기</button></div>
             : claudeOld && !setup ? <ConnectUpdate pc={pc} onDone={() => setOld(false)} />
             : setup ? <ClaudeSetup s={setup} onRetry={connectClaude} onCancel={cancelSetup} onTerminal={() => { setSetup(null); loginAgent('claude'); }} onCode={async (code) => { await setupCode(code); setSetup((v) => (v ? { ...v, codeSent: true } : v)); }} />
             : <div class="btn-row">
-              <button type="button" class={`btn${has('chatgpt') ? '' : ' btn-primary'}`} onClick={connectClaude}>Claude 계정으로 로그인</button>
+              <button type="button" class={`btn${has('chatgpt') || quiet ? '' : ' btn-primary'}`} onClick={connectClaude}>Claude 계정으로 로그인</button>
               <span class="small muted">{!ag.claude?.installed ? '처음 한 번 Claude Code를 자동으로 설치해요(1~3분).' : ag.claude.need === 'update' ? 'Claude Code를 새 버전으로 바꾸고 로그인해요.' : ag.claude.from === 'desktop' ? 'Claude 데스크톱 앱이 있어 설치 없이 로그인만 해요.' : '브라우저에서 로그인만 하면 돼요.'}</span>
               {pending === 'claude' && <span class="small muted" role="status">터미널 창에서 진행해 주세요. 끝나면 바로 만들기 시작해요.</span>}
             </div>}
@@ -169,7 +172,7 @@ export function SubscriptionWay({ p, ready, wait = '', idle, go }) {
       : pc.state === 'unknown' ? <p class="small muted" role="status">lecpage 커넥트를 찾는 중…{perm === 'prompt' && <b> 브라우저가 묻는 창에서 [허용]을 눌러 주세요.</b>}</p>
 
       : <div class="stack" style={{ gap: '8px' }}>
-        {!open ? <div class="btn-row"><button type="button" class={`btn${p.demo ? '' : ' btn-primary'}`} onClick={() => (p.demo ? make({ id: 'demo', label: '' }) : setOpen(true))}>ChatGPT·Claude 계정으로 연결</button><span class="small muted">작은 프로그램 lecpage 커넥트를 한 번 설치해요.</span></div> : download}
+        {!open ? <div class="btn-row"><button type="button" class={`btn${p.demo || quiet ? '' : ' btn-primary'}`} onClick={() => (p.demo ? make({ id: 'demo', label: '' }) : setOpen(true))}>ChatGPT·Claude 계정으로 연결</button><span class="small muted">작은 프로그램 lecpage 커넥트를 한 번 설치해요.</span></div> : download}
         {isSafari() ? <p class="small muted">Safari는 lecpage 커넥트가 여는 화면(127.0.0.1)에서 이어서 해요.</p> : open && <PairHere />}
       </div>}
       {welcome && <div class="notice" role="status"><b>ChatGPT 요금제를 쓰고 있어요.</b> lecpage에서 보내는 요청은 ChatGPT 요금제 사용량에 들어가요. 사용량과 앱 연결은 ChatGPT 설정에서 관리해요. <button type="button" class="btn btn-sm" onClick={() => setWelcome(false)}>닫기</button></div>}
@@ -355,12 +358,14 @@ export function OsWay({ os, onGet, main = true }) {
     </div>);
 }
 /** lecpage 커넥트 받기: 지금 운영체제 방법 하나 + 접힌 [다른 운영체제] */
-function GetConnect({ onGet }) {
+function GetConnect({ onGet, main = true }) {
   const os = osName(); const here = os === 'mobile' ? '' : os;
+  // 휴대폰·태블릿: 설치할 수 없으니 PC에서 하는 순서(이 PC에서…·Node.js…)는 보이지 않고 그 사실만(AI 선택은 휴대폰에서 이 안내까지 오지 않음)
+  if (!here) return <p class="small">lecpage 커넥트는 PC(Windows·Mac·Linux)에 설치해요. 휴대폰에서는 아래 [다른 방법]의 API 키로 만들어요.</p>;
   return (
     <div class="stack" style={{ gap: '10px' }}>
       <p class="small">lecpage 커넥트는 이 PC에서 ChatGPT·Claude 계정을 lecpage에 이어 주는 작은 프로그램이에요.</p>
-      {here ? <OsWay os={here} onGet={onGet} /> : <p class="small warn-line">lecpage 커넥트는 PC(Windows·Mac·Linux)에 설치해요. 휴대폰에서는 아래 [다른 방법]의 API 키로 만들어요.</p>}
+      <OsWay os={here} onGet={onGet} main={main} />
       <p class="small muted">켜지면 이 화면과 저절로 연결돼요. 그다음 아래에서 계정으로 로그인해요. 처음 한 번 Node.js(무료)를 함께 받아요.{here && here !== 'win' ? ' 쓰는 동안 터미널 창은 열어 두세요.' : ''}</p>
       <details class="connect-os"><summary class="small">다른 운영체제</summary>
         {Object.keys(OS_NAME).filter((k) => k !== here).map((k) => <div class="stack" style={{ gap: '4px' }}><b class="small">{OS_NAME[k]}</b><OsWay os={k} onGet={onGet} main={false} /></div>)}

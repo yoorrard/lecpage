@@ -468,17 +468,24 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       col.notebook = true;
       if (n > 1) warn('notebook-many', `${where}: 모음은 한 사이트에 하나면 돼요(모두 같은 모음을 보여요).`);
       return { html: W.notebookBox({ id: `lpk-nb${n > 1 ? '-' + n : ''}` }) };
+    // 자리를 정한 것(참여 막대·'지금' 줄·공유 단추)은 그 쪽에서만 정한 것으로 봄: 다른 쪽은 저절로 붙는 기본 자리를 그대로 받음
+    // (한 쪽에만 data-lp="now"를 두면 나머지 쪽에 '지금' 줄이 아예 없어져 공지·타이머·투표 알림이 보이지 않던 것)
     case 'dock':
-      col.dockPlaced = true;
+      placedOn(col, page).dock = true;
       return { html: ctx.liveOn ? `<aside class="lp-dock" data-dock hidden aria-label="참여 도구">${W.dockInner(ctx.dock)}</aside>` : '', cls: 'lpk lpk-dock lpk-dock--placed' };
     case 'now':
-      col.nowPlaced = true;
+      placedOn(col, page).now = true;
       return { html: nowHtml(ctx), cls: 'lpk lpk-now lpk-now--placed' };
     case 'share':
-      col.sharePlaced = true;
+      placedOn(col, page).share = true;
       return { html: W.shareButton(), cls: 'lpk lpk-share-w' };
     default: return null;
   }
+}
+/** 이 쪽에서 자리를 정한 키트 부품({ dock, now, share }) */
+function placedOn(col, page) {
+  if (!col.placed) col.placed = {};
+  return col.placed[page] || (col.placed[page] = {});
 }
 /** 자료 주소: http(s)·사이트 안 상대 경로만 */
 /** 자료실 목록 꼴 맞추기: [{ title, href, desc, kind, size }] (60개까지, 이름 없는 것 빼기) */
@@ -758,9 +765,10 @@ function finishPage(html, page, { ctx, col, data, csp, noindex, live, title }) {
   if (firstStyle && firstStyle.start > at) edits.push({ start: firstStyle.start, end: firstStyle.start, text: kitCss + '\n' });
   // 몸: 실습 단계가 있으면 data-stations(키트), '지금' 줄(자리를 정하지 않았으면 맨 앞)
   const stepsHere = /data-st="/.test(s);
+  const placed = placedOn(col, page); // 이 쪽에서 자리를 정한 것만(다른 쪽이 정한 자리는 이 쪽과 상관없음)
   if (body) {
     const set = stepsHere ? { 'data-stations': 'kit', 'data-layout': 'kit' } : {};
-    edits.push({ start: body.start, end: body.end, text: (Object.keys(set).length ? rewriteOpen(body, { set }) : s.slice(body.start, body.end)) + (col.nowPlaced ? '' : `\n<div class="lpk lpk-now">${nowHtml(ctx)}</div>`) });
+    edits.push({ start: body.start, end: body.end, text: (Object.keys(set).length ? rewriteOpen(body, { set }) : s.slice(body.start, body.end)) + (placed.now ? '' : `\n<div class="lpk lpk-now">${nowHtml(ctx)}</div>`) });
   }
   // 키트가 연수 중에 더하는 칸 자리: <main> 끝(없으면 키트 부품 앞)
   const extra = `<div class="lpk lpk-extra" data-lp-extra>${page === 'index.html' && col.autoMaterials ? col.autoMaterials : ''}</div>`;
@@ -771,7 +779,7 @@ function finishPage(html, page, { ctx, col, data, csp, noindex, live, title }) {
     W.madeWith(), // 'Made with Lecpage'(참가자 쪽에만. 강사·발표 화면·안내문은 보조 쪽이라 이 길을 거치지 않음)
     W.shareDialog({ live, code: ctx.code, codeWord: ctx.words.code }),
     live ? W.joinDialog({ anonymous: ctx.anonymous, collect: data.privacy.collect, consent: data.privacy.consent, official: ctx.done, keep: data.privacy.keep, local: ctx.provider === 'local' }) : '',
-    live && !col.dockPlaced ? `<aside class="lp-dock" data-dock hidden aria-label="참여 도구">${W.dockInner({ ...f, extra: col.sharePlaced ? '' : `<button class="lp-fold-btn lpk-dock-share" type="button" data-share aria-haspopup="dialog" aria-label="QR 코드로 공유" title="QR 공유">${icon('qr')}</button>` })}</aside>` : '',
+    live && !placed.dock ? `<aside class="lp-dock" data-dock hidden aria-label="참여 도구">${W.dockInner({ ...f, extra: placed.share ? '' : `<button class="lp-fold-btn lpk-dock-share" type="button" data-share aria-haspopup="dialog" aria-label="QR 코드로 공유" title="QR 공유">${icon('qr')}</button>` })}</aside>` : '',
     live ? '<div class="lp-reactions" data-reactions aria-hidden="true"></div>' : '',
     live && f.help ? W.helpSheet() : '',
     W.TOAST,

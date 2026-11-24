@@ -21,8 +21,10 @@ const safe = (n) => n.replace(/[^\w가-힣.\-]+/g, '_').slice(0, 120);
 // 사진은 교재로 읽지 않음: 빨간 오류 대신 실제로 넣는 곳을 한 줄로(여러 장이어도 한 줄)
 const PHOTO = /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i;
 const PHOTO_NOTE = '사진은 교재로 읽지 않아요. 사이트에 실으려면 사이트를 만든 뒤 미리보기의 그림을 눌러 바꿔요.';
+/** 사진 줄의 형식 표시: 넣은 사진의 실제 형식(png는 PNG). 형식이 섞였으면 '사진' */
+const photoKind = (names = []) => { const k = [...new Set(names.map((n) => (String(n).split('.').pop() || '').toLowerCase().replace('jpeg', 'jpg')))]; return k.length === 1 ? k[0] : '사진'; };
 // 쪽 그림을 만들지 못하고 글자만 읽은 교재(예전 형식, 그리기 도구를 못 받은 한글 등, 커넥트 없음): PDF로 저장하는 법을 그 줄에서 바로
-const TEXT_ONLY_NOTE = '글자만 읽었어요. PDF로 저장해 함께 올리면 그림·디자인까지 읽어 더 정확해요.';
+const TEXT_ONLY_NOTE = '글자만 읽었어요. PDF로 저장해 함께 넣으면 그림·디자인까지 읽어 더 정확해요.';
 // 쪽 그림은 모든 교재를 합쳐 MAX_SLIDES장까지(교재 슬라이드가 보여 주는 쪽 수): 몫이 남지 않은 교재는 그 줄에 있는 그대로 알림
 // 읽다가 끝을 보지 못한 교재(읽는 중에 탭이 죽거나 창을 닫음): 줄에 시도 횟수(tries)를 남겨, 한 번 끝을 못 본 뒤에는 열 때마다 저절로 다시 읽지 않음(큰 교재가 탭을 거듭 죽이지 않게)
 // 예전 한도(100MB)보다 큰 교재는 처음 읽기부터 한 번으로 셈(읽다 죽으면 다시 열 때 바로 물음). 작은 교재는 지금처럼 한 번은 저절로 이어 읽음
@@ -50,7 +52,8 @@ function useIngest(p, update, first = []) {
   const [stop, setStop] = useState(null); // 쪽 그림을 만드는 동안: [중지](그때까지 만든 그림은 씀)
   const [extra, setExtra] = useState(() => incomingRows(first)); // 원본을 담아 목록에 적기 전까지 보일 줄
   const [gone, setGone] = useState(null); // ✕로 뺀 교재: 남은 교재를 다시 읽는 동안에도 목록에서 먼저 뺌
-  async function ingestAll(fileObjs0, { replace = false, keep = null, tries = null } = {}) {
+  /** fresh: 방금 넣은 교재의 이름(같은 이름을 다시 넣어 남은 교재까지 다시 읽을 때). 끝 알림은 방금 넣은 것만 셈 */
+  async function ingestAll(fileObjs0, { replace = false, keep = null, tries = null, fresh = null } = {}) {
     const photos = fileObjs0.filter((f) => PHOTO.test(f.name));
     const fileObjs = fileObjs0.filter((f) => !PHOTO.test(f.name));
     // 읽다 멈춘 채 남은 다른 교재(이번에 읽지 않는 것)는 그 줄 그대로 둠: 다른 교재를 넣거나 빼도 목록에서 사라지거나 저절로 다시 읽히지 않게
@@ -65,11 +68,11 @@ function useIngest(p, update, first = []) {
       for (const m of again) if (m.pdf?.key) await blobs.remove(p.id, m.pdf.key); // 예전 파일로 만든 PDF는 다시 만듦
       // 새 원본을 먼저 담음: 다시 읽는 중에 창을 닫았다 열어도(이어서 읽기) 예전 파일이 아니라 새 파일을 읽게
       for (const f of fileObjs) if (!tooBigFile(f)) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(await f.arrayBuffer()));
-      return ingestAll([...rest, ...fileObjs0], { replace: true, keep: (p.files || []).filter((m) => m.photos).flatMap((m) => m.photos), tries });
+      return ingestAll([...rest, ...fileObjs0], { replace: true, keep: (p.files || []).filter((m) => m.photos).flatMap((m) => m.photos), tries, fresh: new Set(fileObjs.map((f) => f.name)) });
     }
     const metas = replace ? [] : (p.files || []).filter((f) => !f.pending && !f.photos);
     const keepPhotos = keep || (replace ? [] : (p.files || []).filter((f) => f.photos).flatMap((f) => f.photos));
-    const photoRow = (names) => (names.length ? [{ name: names.length > 1 ? `사진 ${names.length}장` : names[0], ext: 'jpg', size: 0, pages: 0, errors: [], photos: names, note: PHOTO_NOTE }] : []);
+    const photoRow = (names) => (names.length ? [{ name: names.length > 1 ? `사진 ${names.length}장` : names[0], ext: photoKind(names), size: 0, pages: 0, errors: [], photos: names, note: PHOTO_NOTE }] : []);
     // 읽는 동안 창을 닫아도 교재가 남게: 원본을 먼저 담고 목록에 '읽는 중'으로 적어 둠(다시 열면 이어서 읽음)
     if (!replace && fileObjs.length) {
       for (const f of fileObjs) if (!tooBigFile(f)) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(await f.arrayBuffer()));
@@ -79,7 +82,7 @@ function useIngest(p, update, first = []) {
     const ing = await loadChunk(() => import('../../lib/ingest.js'), { files: true }); // 새 배포로 조각이 지워졌으면 '새 버전' 안내(고른 교재는 다시)
     const mats = [];
     // 쪽 그림 묶음: 더 넣을 때는 있던 묶음 뒤에 이어 붙이고, 다시 읽을 때(replace)는 처음부터 다시 매김(읽는 중에 창을 닫아도 어긋나지 않게 먼저 비워 적음)
-    let sets = replace ? [] : slideSetsOf(p); let ok = 0; let cut = 0;
+    let sets = replace ? [] : slideSetsOf(p); let ok = 0; let cut = 0; const read = new Set(); // read: 읽은 교재의 이름
     if (replace) {
       await blobs.removePrefix(p.id, 'assets/slides/');
       // 같은 저장에서 다시 읽을 교재를 '읽는 중'으로 적어 둠(뺀 교재는 목록에서 빠짐, 글도 비움): 다시 읽는 중에 창을 닫거나 새로 고쳐도
@@ -161,16 +164,19 @@ function useIngest(p, update, first = []) {
         ...(capped && !errors.length ? { note: [convNote, capNote(shots.length)].filter(Boolean).join(' ') } : {}),
         // 쪽 그림을 이 교재의 일부만 그림([중지]를 눌렀거나 쪽 그림 몫이 모자람): 배포 화면이 '교재 슬라이드에서 모든 쪽을 볼 수 있어요'라고 말하지 않게 적어 둠
         ...(shots.length && (!whole || capped) ? { slidesPart: true } : {}) });
-      if (!errors.length || material.pages?.length) { mats.push(material); ok++; }
+      if (!errors.length || material.pages?.length) { mats.push(material); ok++; read.add(f.name); }
       if (!tooBigFile(f) && replace) await blobs.put(p.id, 'src/' + safe(f.name), new Uint8Array(bytes)); // (새로 넣을 때는 읽기 전에 이미 담음)
     }
     const prev = !replace && p.material ? [p.material] : [];
     const merged = mats.length || prev.length ? ing.materialToJSON(ing.mergeMaterials([...prev, ...mats])) : null;
     update({ material: merged, files: [...metas, ...held, ...photoRow([...keepPhotos, ...photos.map((f) => f.name)])], ...setsFields(sets) });
-    const bad = fileObjs.length - ok;
+    // 끝 알림은 방금 넣은 교재만 셈(같은 이름을 다시 넣으면 남은 교재도 함께 다시 읽지만, 그것까지 세면 '3개 중 1개'처럼 넣지 않은 수가 나옴)
+    const mine = fresh ? fileObjs.filter((f) => fresh.has(f.name)) : fileObjs;
+    const n = mine.length; const good = fresh ? mine.filter((f) => read.has(f.name)).length : ok;
+    const bad = n - good;
     const ph = photos.length ? ' 사진은 사이트를 만든 뒤 넣어요.' : '';
-    toast(!fileObjs.length ? (photos.length ? PHOTO_NOTE : '') : bad === 0 ? (cut ? `교재 ${ok}개를 읽었어요. 쪽 그림은 ${cut}장까지만 만들었어요.${ph}` : `교재 ${ok}개를 읽었어요.${ph}`)
-      : ok ? `${fileObjs.length}개 중 ${ok}개를 읽었어요. 빨간 글씨를 확인해 주세요.${ph}` : '교재를 읽지 못했어요. 빨간 글씨를 확인해 주세요.');
+    toast(!n ? (photos.length ? PHOTO_NOTE : '') : bad === 0 ? (cut ? `교재 ${good}개를 읽었어요. 쪽 그림은 ${cut}장까지만 만들었어요.${ph}` : `교재 ${good}개를 읽었어요.${ph}`)
+      : good ? `${n}개 중 ${good}개를 읽었어요. 빨간 글씨를 확인해 주세요.${ph}` : '교재를 읽지 못했어요. 빨간 글씨를 확인해 주세요.');
   }
   async function handle(list) {
     const files = Array.from(list || []); if (!files.length) return;
@@ -298,7 +304,7 @@ export function StepStart({ p, update, go, job, idle, reload }) {
           {rows.length > 0 && (
             <ul class="files" ref={listRef} aria-label="읽은 교재">
               {rows.map((f, i) => (
-                <li><span class="kind">{(f.ext || '').toUpperCase()}</span>
+                <li><span class="kind">{(f.photos ? photoKind(f.photos) : f.ext || '').toUpperCase()}</span>
                   <div><b>{f.name}</b><div class="small muted">{f.photos ? (f.photos.length > 1 ? f.photos.join(', ') : '') : fmtBytes(f.size)}{f.pending ? (heldRow(f) && !busy ? ' · 읽다가 멈춤' : ' · 읽는 중') : ''}{f.pages ? ` · ${f.pages}쪽` : ''}</div>{f.note && <div class="small">{f.note}</div>}{heldRow(f) && !busy && <div class="small file-held" role="status">{HELD_NOTE} <button type="button" class="btn btn-sm" onClick={() => resume(true)}>이어서 읽기</button></div>}{f.howto && HOWTO[f.howto] && <details class="small file-howto"><summary>PDF로 저장하는 법</summary><ul>{HOWTO[f.howto].map(([app, how]) => <li><b>{app}</b>: {how}</li>)}</ul></details>}{f.errors?.map((e) => <div class="small" style={{ color: 'var(--bad)' }}>{e}</div>)}{f.warns?.map((e) => <div class="small file-warn">{e}</div>)}</div>
                   <button class="icon-btn" disabled={!!busy || p.demo} onClick={() => remove(i)} aria-label={`${f.name} 삭제`} title="삭제">✕</button></li>
               ))}

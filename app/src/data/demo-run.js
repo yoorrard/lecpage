@@ -12,6 +12,10 @@ const RAW = import.meta.glob('../../../skills/lecpage/references/designs/neo-tea
 const files = Object.fromEntries(Object.entries(RAW).map(([k, v]) => [k.replace(/^.*\/neo-teach\/site\//, ''), v]));
 
 export const DEMO_FILE = { name: '질문이 먼저, AI는 그다음_교재.pdf', url: pdf };
+// 사이트가 가리키는 자료 파일(사례의 site/files/ 그대로: 수업 설계 캔버스·실습 프롬프트 모음). AI 답(글 파일)에는 들어가지 않으므로 체험 연수의
+// 사이트 파일로 따로 넣어 둠(lib/demo.js openDemo) — 없으면 체험이 끝난 화면에 '링크 files/…가 가리키는 파일이 없어요'가 꼭 고칠 곳으로 뜸
+const FILE_URLS = import.meta.glob('../../../skills/lecpage/references/designs/neo-teach/site/files/*', { query: '?url', import: 'default', eager: true });
+export const DEMO_SITE_FILES = Object.entries(FILE_URLS).map(([k, url]) => ({ path: 'files/' + k.split('/').pop(), url }));
 /** 단계마다 AI 답을 받는 데 쓰는 시간(초, 체험이라 짧게) */
 export const DEMO_PACE = { build: 7 };
 /** 단계 이름 → 그 단계의 AI 답(만들기 한 번뿐) */

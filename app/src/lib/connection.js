@@ -174,16 +174,16 @@ export const consentId = (c) => (!c ? '' : c.id === 'key' || c.way === 'key' ? `
 export function consentText(id) {
   const w = WAYS[id]; if (!w) return null;
   return { title: w.title, lines: [
-    '[만들기]나 [AI로 수정]을 누를 때만 교재·사이트와 요청 글을 보내요.',
+    '[만들기]나 [AI로 수정]을 누를 때만 교재·사이트와 프롬프트를 보내요.',
     `${w.from}에서 ${w.to} 바로 가요. ${w.bill}`,
     `${w.login}는 ${w.at}에만 있고, lecpage 운영자에게는 가지 않아요.`,
   ] };
 }
 const hash = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
-const sig = (id) => { const t = consentText(id); return t ? hash(t.title + t.lines.join('\n')) : ''; };
+const sig = (id, old = false) => { const t = consentText(id); return t ? hash(t.title + t.lines.join('\n').replace(old ? '프롬프트를' : '\0', '요청 글을')) : ''; };
 function consents() { try { return JSON.parse(localStorage.getItem(CONSENT) || '{}') || {}; } catch { return {}; } }
-/** 이 길에 지금 안내 글로 동의했는지 */
-export function hasConsent(id) { return !WAYS[id] || consents()[id] === sig(id); }
+/** 이 길에 지금 안내 글로 동의했는지. 낱말만 표준 용어로 바꾼 예전 글('요청 글' → '프롬프트', 뜻은 같음)에 한 동의도 그대로 받음(다시 묻지 않게) */
+export function hasConsent(id) { return !WAYS[id] || [sig(id), sig(id, true)].includes(consents()[id]); }
 let asking = null; const askSubs = new Set();
 /** 처음이면 동의 창을 띄우고 답을 기다림(동의 → true). 이미 동의했으면 바로 true. 창은 ConsentHost가 그림 */
 export function askConsent(id) {

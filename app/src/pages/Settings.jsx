@@ -49,6 +49,8 @@ export function Settings() {
   const [st, setSt] = useState(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [wiping, setWiping] = useState(false); // 지우는 중(도는 AI 작업을 멈추느라 몇 초 걸릴 수 있음): 한 번 더 눌러 겹쳐 돌지 않게
+  const [wiped, setWiped] = useState(false); // 방금 모두 지움(브라우저의 사용량 값은 지운 뒤에도 한동안 예전 값)
+  const [gen, setGen] = useState(0); // 지운 뒤 배포할 곳 줄을 새로 그림
   const [ai, setAi] = useState(false);
   const reloadKeys = async () => { const o = {}; for (const k of Object.keys(PROVIDERS)) o[k] = await loadKey(k); setKeys(o); };
   const anyAi = Object.values(keys).some((k) => k?.key);
@@ -68,7 +70,11 @@ export function Settings() {
     if (wiping) return;
     if (!confirmDel) { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 5000); return; }
     setWiping(true);
-    try { await wipeNow(); } catch { toast('다 지우지 못했어요. 다시 눌러 주세요.'); }
+    let ok = true;
+    try { await wipeNow(); } catch { ok = false; toast('다 지우지 못했어요. 다시 눌러 주세요.'); }
+    // 지운 모습을 바로 보임: 연결한 AI 줄·배포할 곳 줄을 다시 읽고(예전 '연결됨'이 남아 보이지 않게), 쓰는 공간은 브라우저가 늦게 알려 주므로 지웠다는 사실을 적음
+    await reloadKeys().catch(() => setKeys({}));
+    setGen((n) => n + 1); if (ok) setWiped(true);
     setConfirmDel(false); setWiping(false); setSt(await storageInfo().catch(() => null));
   }
   async function wipeNow() {
@@ -117,7 +123,7 @@ export function Settings() {
         <details class="set-more"><summary><b>다른 곳에 배포</b> <span class="small muted">Cloudflare · Netlify · Vercel · GitHub Pages</span></summary>
           <p class="small muted">바로 배포는 연결 없이 돼요. 내 계정의 다른 곳에 배포할 때만 연결해요. <a href="#/help/deploy">배포하는 법</a></p>
           {/* 배포하기 화면과 같은 순서(쉬운 곳이 먼저). Cloudflare는 lecpage 커넥트로 로그인하므로 토큰 연결이 없음 */}
-          <ul class="list-rows"><CfHostRow />{['netlify', 'vercel', 'github'].filter((k) => Object.values(KIND).includes(k)).map((k) => <HostConnect kind={k} key={k} />)}</ul>
+          <ul class="list-rows" key={gen}><CfHostRow />{['netlify', 'vercel', 'github'].filter((k) => Object.values(KIND).includes(k)).map((k) => <HostConnect kind={k} key={k} />)}</ul>
         </details>
       </section>
       <Dialog open={ai} onClose={() => setAi(false)} label="AI 연결" wide>
@@ -125,13 +131,13 @@ export function Settings() {
       </Dialog>
       <section>
         <h2 class="h-sub">저장 공간</h2>
-        {st && <p>사용 {fmtBytes(st.usage)}{st.quota ? ` / 약 ${fmtBytes(st.quota)}` : ''} · {st.persisted ? '브라우저가 지우지 않도록 보호 중' : '보호 안 됨(공간이 부족하면 브라우저가 지울 수 있어요)'}</p>}
+        {st && <p>{wiped ? '방금 모두 지웠어요' : <>사용 {fmtBytes(st.usage)}{st.quota ? ` / 약 ${fmtBytes(st.quota)}` : ''}</>} · {st.persisted ? '브라우저가 지우지 않도록 보호 중' : '보호 안 됨(공간이 부족하면 브라우저가 지울 수 있어요)'}</p>}
         <div class="btn-row">
           {st && !st.persisted && <button class="btn btn-sm" onClick={async () => { const ok = await askPersist(); setSt(await storageInfo()); toast(ok ? '저장 공간을 보호했어요.' : '브라우저가 허락하지 않았어요.'); }}>저장 공간 보호</button>}
           <button class="btn btn-sm" onClick={exportAll}>모든 연수 파일로 저장</button>
           <button class="btn btn-sm btn-danger" disabled={wiping} aria-busy={wiping ? 'true' : undefined} onClick={wipe}>{wiping ? '삭제하는 중…' : confirmDel ? '한 번 더 눌러 삭제' : '모든 데이터 삭제'}</button>
         </div>
-        <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·배포 토큰이 모두 없어져요. lecpage 커넥트 연결(ChatGPT 계정, 커넥트로 배포한 Cloudflare·Vercel 로그인 포함)도 해제해요. 이미 배포한 사이트는 그대로예요. 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
+        <p class="small muted">지우면 이 브라우저에 있는 연수·교재와 AI 키·배포 토큰이 모두 없어져요. lecpage 커넥트 연결(ChatGPT 계정, 커넥트로 배포한 Cloudflare·Vercel 로그인 포함)도 해제해요. 이미 배포한 사이트는 그대로 열려 있지만 관리자 키도 지워져서, 이 브라우저에서 배포한 사이트를 다시 배포하거나 배포를 취소할 수 없고 강사 화면에도 들어갈 수 없어요. 계속 쓸 연수는 먼저 그 연수의 [파일로 저장]에서 '내 다른 기기에서 같은 주소로 이어 배포하기'를 켜서 저장해 주세요. 공용 PC라면 끝난 뒤 연수를 파일로 저장하고 지워 주세요.</p>
       </section>
       <StatsSetting />
       <ConsentHost />

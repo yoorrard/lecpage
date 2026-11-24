@@ -34,6 +34,8 @@ const dump = (p, id) => p.evaluate(async (pid) => {
   const b = await chromium.launch();
   // ── 1 저장 → 다른 브라우저에서 열기 ──
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
+  // 앱이 붙인 파일 이름을 적어 둠: 이 시험 도구는 한글 이름의 다운로드를 'download'로 알려 줄 때가 있어(suggestedFilename), 앱이 준 이름(a.download)을 직접 봄
+  await ctx.addInitScript(() => { const c = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { if (this.download) (window.__saved = window.__saved || []).push(this.download); return c.call(this); }; });
   const p = await ctx.newPage(); const errs = L.watch(p);
   await L.mockAi(ctx, null, { fallback: true });
   await L.startWithFile(p, [L.FIX + '/workshop.pptx']);
@@ -58,7 +60,9 @@ const dump = (p, id) => p.evaluate(async (pid) => {
   ok('fixture: page images exist twice in the browser (assets/slides and site/material), plus the original and a >32MiB value', slides.length === 13 && mats.length === 13 && !!before['src/workshop.pptx'] && before['src/big-extra.pdf']?.size === BIG && before['src/big-extra.pdf'].blob === true, JSON.stringify({ slides: slides.length, mats: mats.length }));
   const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), p.click('.btn:has-text("파일로 저장")')]);
   const file = path.join(tmp, 'saved.lecpage'); await dl.saveAs(file); // 경로는 영문으로(이 시험 도구는 한글 경로의 파일을 입력칸에 넣지 못할 때가 있음)
-  ok('saved file: named after the project with the .lecpage ending', /\.lecpage$/.test(dl.suggestedFilename()), dl.suggestedFilename());
+  // 연수 이름은 AI가 찾은 연수명('저장 왕복')을 만든 직후부터 씀(확인 전에도) → 파일 이름도 그 이름
+  const named = await p.evaluate(() => (window.__saved || []).pop() || '');
+  ok('saved file: named after the project with the .lecpage ending', /^저장.왕복\.lecpage$/.test(named), `${named} (tool: ${dl.suggestedFilename()})`);
   const zip = readStoredZip(fs.readFileSync(file));
   const pj = JSON.parse(Buffer.from(zip['project.json']).toString('utf8'));
   ok('saved file: the original and site page images are inside', !!zip['src/workshop.pptx'] && Object.keys(zip).filter((k) => k.startsWith('site/material/')).length === 13 && zip['src/big-extra.pdf']?.length === BIG);

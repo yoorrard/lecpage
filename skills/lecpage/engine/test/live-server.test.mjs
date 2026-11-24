@@ -236,6 +236,17 @@ test('node + http adapter: 즉석 투표(polls 모음)와 출석 한 번 누르�
   assert.ok((await admin.exportCsv('attendance')).includes('출석만한사람'));
   // 닫은 투표에 늦은 답을 받지 않는 규칙은 protocolSuite의 closed polls 시험이 봄
   await admin.update('polls', poll.id, { open: false });
+  // 강사 화면(관리자 키)은 참가자로 등록되지 않음: 제가 만든 즉석 투표를 닫거나 손으로 더한 참가자를 고쳐도 참가자 수·명단은 그대로
+  // (전에는 닫을 때 POST /join이 나가 '참가자NNN' 유령 줄이 생겼음)
+  assert.equal(admin.me(), null, '강사 화면은 참가자가 아님');
+  const rows = (await admin.exportCsv('participants')).replace(/^﻿/, '').trim().split(/\r?\n/);
+  assert.equal(rows.length, 2, '참가자 CSV: 머리 줄 + 참가자 한 명 — ' + rows.join(' | '));
+  const pd = await admin.add('participants', { name: '손으로 더한 사람', consent: true });
+  await admin.update('participants', pd.id, { name: '고친 이름' });
+  assert.equal(admin.me(), null);
+  const after = (await admin.exportCsv('participants')).replace(/^﻿/, '').trim().split(/\r?\n/);
+  assert.equal(after.length, 3, after.join(' | '));
+  assert.ok(after.some((l) => l.includes('고친 이름')) && !after.some((l) => /참가자\d{3}/.test(l)), after.join(' | '));
   admin.close(); p.close();
 });
 

@@ -451,7 +451,8 @@
       if (ON.attend) { var rc = rosterCount(); kpi(rc.in, '입실', '퇴실 ' + rc.out + '명' + (rc.manual ? ' · 직접 추가 ' + rc.manual : ''), '#lp-p-att'); }
       if (ON.help) kpi(openHelp.length, '도움 요청', openHelp[0] ? (openHelp[0].nickname || '참가자') + (openHelp[0].seat ? ' · ' + openHelp[0].seat : '') : '없어요', '#lp-p-help', openHelp.length > 0);
       if (ON.signal) { var rs = sig.total ? Math.round(sig.red / sig.total * 100) : 0; kpi(rs + '%', '모르겠어요', sig.total + '명 중 ' + sig.red + '명', '#lp-p-signal', sig.total > 0 && rs >= 25); }
-      if (ON.progress) { var pc = { done: 0, doing: 0, stuck: 0 }; latestProgress().forEach(function (x) { if (pc[x.status] !== undefined) pc[x.status]++; }); kpi(pc.stuck, '실습 막힘', '완료 ' + pc.done + ' · 하는 중 ' + pc.doing, '#lp-p-heat', pc.stuck > 0); }
+      // 사람 수로 셈(사람×단계가 아님): 막힌 사람 · 모든 단계를 끝낸 사람 · 지금 어느 단계를 하고 있는 사람
+      if (ON.progress) { var pc = progressPeople(); kpi(pc.stuck, '실습 막힘', '모두 완료 ' + pc.done + '명 · 하는 중 ' + pc.doing + '명', '#lp-p-heat', pc.stuck > 0); }
       kpi(op ? pollAnswers(op.id).length : '–', '지금 투표', op ? op.question : '열린 투표가 없어요', '#lp-p-poll');
       if (ON.qa) kpi(qs.filter(function (q) { return q.status === 'open'; }).length, '열린 질문', '전체 ' + qs.length + '개', '#lp-p-qa');
       if (ON.survey) kpi(vals('survey').length, '설문 응답', '', '#lp-p-data');
@@ -863,6 +864,21 @@
     s.appendChild(el('p', 'lp-con-sub', PAGES.length ? '리모컨이나 PageDown·PageUp으로도 넘겨요(입력 칸 밖에서). 발표 화면에서 넘겨도 여기와 참가자 화면이 함께 바뀌어요.' : '발표 화면에서는 키 하나로도 띄워요: J 참여 QR · V 투표 · Q 질문 · T 타이머 · N 공지 · B 화면 숨기기.'));
     b.appendChild(s);
   }
+  /**
+   * 시작 전(교재를 아직 띄우지 않음) 발표 화면에 실제로 떠 있는 것 — 발표 화면(screen.js)과 같은 순서:
+   * 겹쳐 띄운 것(가림·큰 타이머·큰 공지·참여 QR) > 열린 투표 > 질문 > 참여 안내(큰 QR). 질문이 올라와 있으면 큰 QR이 아니라 질문 목록이 떠 있음
+   */
+  function beforeWords() {
+    var ov = ovNow(), op = allPolls().filter(function (p) { return p.id === state.openPoll; })[0];
+    if (ov === 'blank') return '발표 화면은 가려 두었어요.';
+    if (ov === 'join') return '발표 화면에는 참여 QR이 크게 떠 있어요.';
+    if (ov === 'timer') return '발표 화면에는 큰 타이머가 떠 있어요.';
+    if (ov === 'notice') return '발표 화면에는 큰 공지가 떠 있어요.';
+    if (op && ov !== 'qa') return '발표 화면에는 열린 투표가 떠 있어요.';
+    var n = ON.qa ? vals('questions').filter(function (q) { return q.status === 'open' || (q.pinned && q.status !== 'hidden'); }).length : 0;
+    if (n) return '발표 화면에는 질문 ' + n + '개가 떠 있어요(참여 QR은 옆에 있어요).';
+    return '발표 화면에는 참여 안내(큰 QR)가 떠 있어요.';
+  }
   function renderPres() {
     if (!P.pres) return;
     var ov = ovNow();
@@ -870,11 +886,13 @@
     if (!C.presView) return;
     var cur = curPage(), i = PAGES.indexOf(cur), nx = PAGES[i + 1];
     if (C.presView._p !== cur) {
-      C.presView._p = cur; C.presView.textContent = '';
-      if (!cur) { var w0 = el('div', 'lp-con-thumb is-now lp-con-before'); w0.appendChild(el('p', '', '시작 전이에요. 발표 화면에는 참여 안내(큰 QR)가 떠 있어요.')); w0.appendChild(el('p', 'lp-con-sub', '[다음 쪽]이나 리모컨을 누르면 ' + PAGES[0] + '쪽부터 띄워요.')); C.presView.appendChild(w0); if (DECK.length) C.presView.appendChild(thumb(PAGES[0], 'is-next')); }
+      C.presView._p = cur; C.presView.textContent = ''; C.presBefore = null;
+      if (!cur) { var w0 = el('div', 'lp-con-thumb is-now lp-con-before'); C.presBefore = el('p', '', ''); w0.appendChild(C.presBefore); w0.appendChild(el('p', 'lp-con-sub', '[다음 쪽]이나 리모컨을 누르면 ' + PAGES[0] + '쪽부터 띄워요.')); C.presView.appendChild(w0); if (DECK.length) C.presView.appendChild(thumb(PAGES[0], 'is-next')); }
       else if (DECK.length) { C.presView.appendChild(thumb(cur, 'is-now')); C.presView.appendChild(thumb(nx, 'is-next')); }
       else C.presView.appendChild(el('p', 'lp-con-sub', '참가자 교재 ' + cur + '쪽'));
     }
+    // 시작 전 한 줄은 그릴 때마다 맞춤(질문·투표가 올라오면 발표 화면도 바뀜). 글이 같으면 그대로 둠
+    if (C.presBefore) { var bw = '시작 전이에요. ' + beforeWords(); if (C.presBefore.textContent !== bw) C.presBefore.textContent = bw; }
     C.pageNo.textContent = cur ? cur + ' / ' + PAGES[PAGES.length - 1] + '쪽' : '시작 전';
     // 이 쪽에 묶인 투표·퀴즈: 바로 열기
     keep(C.pageHere, function () {
@@ -1026,6 +1044,11 @@
         if (ROSTER_EDIT) {
           // [입실]·[퇴실]은 지금 시각으로 적으므로 오늘을 볼 때만(지난 날은 [고치기]에서 시각을 적음)
           if (!isToday) { /* 지난 날 */ }
+          // 퇴실만 적힌 사람: 지금 시각으로 입실을 적으면 입실이 퇴실보다 늦어짐 → 고치는 칸을 열어 입실 시각을 직접 적게
+          else if (!r.i && r.o) ac.appendChild(btn('입실', '', function () {
+            attEdit = p.id; renderAtt(); toast((p.name || p.nickname) + ' 님은 퇴실이 먼저 적혀 있어요. 입실 시각을 적어 주세요.');
+            var tin = C.attBox && C.attBox.querySelector('.lp-con-edit input[type=time]'); if (tin) tin.focus();
+          }, 'ain' + p.id));
           else if (!r.i) ac.appendChild(btn('입실', '', function () { setAt(r, 'in', now()).then(function () { queue(); toast((p.name || p.nickname) + ' 님 입실을 적었어요.'); }, err); }, 'ain' + p.id));
           else if (!r.o) ac.appendChild(btn('퇴실', '', function () { setAt(r, 'out', now()).then(function () { queue(); toast((p.name || p.nickname) + ' 님 퇴실을 적었어요.'); }, err); }, 'aout' + p.id));
           ac.appendChild(btn(attEdit === p.id ? '닫기' : '고치기', '', function () { attEdit = attEdit === p.id ? '' : p.id; renderAtt(); }, 'aed' + p.id));
@@ -1118,12 +1141,32 @@
     var latest = {}; vals('progress').forEach(function (p) { var k = (p.by || p.id) + '|' + p.station; if (!latest[k] || (p.at || p.createdAt) >= (latest[k].at || latest[k].createdAt)) latest[k] = p; });
     return Object.keys(latest).map(function (k) { return latest[k]; });
   }
+  /**
+   * 사람마다의 실습 진행: { who: { st: { 단계: 상태 }, cur } } + 사람 수(stuck 막힌 사람 · done 모든 단계를 끝낸 사람 · doing 지금 하는 사람).
+   * 한 사람은 한 단계에서만 '하는 중': 가장 나중에 '하는 중'으로 적힌 단계(cur). 완료를 누르지 않고 넘어간 앞 단계는 '하는 중'으로 세지 않음
+   * — 그래야 단계별 수와 띠의 수가 '참가자 N명 기준'과 맞음(사람×단계로 세면 참가자보다 많아짐)
+   */
+  function progressPeople() {
+    var who = {}, n = { who: who, stuck: 0, done: 0, doing: 0 };
+    latestProgress().forEach(function (p) {
+      var k = p.by || p.id, o = who[k] || (who[k] = { st: {}, cur: null, at: -1 }), t = +(p.at || p.createdAt) || 0;
+      o.st[p.station] = p.status;
+      if (p.status === 'doing' && t >= o.at) { o.at = t; o.cur = p.station; }
+    });
+    Object.keys(who).forEach(function (k) {
+      var o = who[k], ids = stations.map(function (s) { return s.id; });
+      var stuck = ids.some(function (id) { return o.st[id] === 'stuck'; }), all = ids.length > 0 && ids.every(function (id) { return o.st[id] === 'done'; });
+      if (stuck) n.stuck++; else if (all) n.done++; else if (o.cur) n.doing++;
+    });
+    return n;
+  }
   function renderHeat(parts) {
-    var prog = latestProgress();
+    var who = progressPeople().who;
     var hb = P.heat.body; hb.textContent = '';
     var total = Math.max(parts.length, 1), ul = el('ul', 'lp-heat');
     stations.forEach(function (s) {
-      var c = { done: 0, doing: 0, stuck: 0 }; prog.forEach(function (p) { if (p.station === s.id && c[p.status] !== undefined) c[p.status]++; });
+      var c = { done: 0, doing: 0, stuck: 0 };
+      Object.keys(who).forEach(function (k) { var o = who[k], v = o.st[s.id]; if (v === 'done') c.done++; else if (v === 'stuck') c.stuck++; else if (v === 'doing' && o.cur === s.id) c.doing++; });
       var li = el('li'); li.appendChild(el('span', '', s.name || s.title));
       var bar = el('div', 'lp-heat-bar'); bar.setAttribute('aria-hidden', 'true'); ['done', 'doing', 'stuck'].forEach(function (t) { var i = el('i', t); i.style.width = (c[t] / total * 100) + '%'; bar.appendChild(i); });
       li.appendChild(bar); li.appendChild(el('small', '', '완료 ' + c.done + ' · 하는 중 ' + c.doing + (c.stuck ? ' · 막힘 ' + c.stuck : ''))); ul.appendChild(li);

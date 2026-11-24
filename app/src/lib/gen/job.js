@@ -511,6 +511,7 @@ async function finish(ctx) {
   let out = null;
   const saved = await projects.patch(rec.pid, (cur) => { out = settle(cur, merged(cur)); const versions = versionsAfter(cur, rec.kind, out, rec.opts?.request); return {
     v: 2, site: out.site, meta: out.meta,
+    ...(out.meta?.title ? { title: out.meta.title } : {}), // 찾은 연수명을 바로 연수 이름으로(위 제목 줄과 '내 연수' 목록이 확인 전에도 같은 이름을 보이게)
     gen: { jobId: rec.id, status: 'done', way: rec.way, provider: rec.provider, model: rec.model, agent: rec.agent || '', at, kind: rec.kind },
     versions,
     ...(rec.kind !== 'make' ? { chat: replyChat(cur, rec.kind, rec.way, out, versions) } : {}),

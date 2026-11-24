@@ -36,5 +36,5 @@ test('읽기·그리기 도구 한도: 조건의 기기에서만 넓히고, 그 
 test('이 시험이 도는 곳(Node)은 조건 밖 → 문구의 숫자도 예전 100MB', () => {
   assert.equal(L.roomy(), false);
   assert.equal(L.tooBigFile({ name: 'a.pdf', size: 101 * L.MB }), true); assert.equal(L.tooBigFile({ name: 'a.pdf', size: 99 * L.MB }), false);
-  assert.equal(L.tooBigNote({ name: 'a.pdf', size: 101 * L.MB }), '100MB가 넘어 읽지 않았어요. 나눠서 올려 주세요.');
+  assert.equal(L.tooBigNote({ name: 'a.pdf', size: 101 * L.MB }), '100MB가 넘어 읽지 않았어요. 나눠서 넣어 주세요.');
 });

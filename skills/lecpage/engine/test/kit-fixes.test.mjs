@@ -312,3 +312,28 @@ test('입실 창의 소속 칸: 학교로 못 박지 않음(회사·기관 연�
   assert.ok(!html.includes('(학교)'));
   assert.match(joinDialog({ collect: ['nickname', 'name', 'school'] }), /<span>소속 · 선택<\/span>/);
 });
+
+// 강의 당일 점검(2026-11-24, 운영 서버): 한 쪽에만 data-lp="now"를 둔 두 쪽 사이트에서 다른 쪽에는 '지금' 줄이 아예 없어
+// 공지·타이머·[투표하러 가기]가 그 쪽 참가자에게 보이지 않았음(자리를 정했는지를 사이트 전체로 봄). 참여 막대·공유 단추도 같은 꼴
+test('자리를 정한 키트 부품(지금 줄·참여 막대·공유)은 그 쪽에서만: 다른 쪽은 저절로 붙는 기본 자리를 그대로 받음', () => {
+  const one = PAGE('<section><h2>질문</h2><div data-lp="qa"></div></section><div data-lp="share"></div>');
+  const two = PAGE('<div data-lp="now"></div><div data-lp="dock"></div><section><h2>퀴즈</h2><div data-lp="poll" data-question="맞는 것은?" data-options=\'["가","나"]\'></div></section>');
+  const r = K.assemble({ 'index.html': one, 'practice.html': two }, { ...META, features: ['qa', 'poll', 'help'] }, { runtime: rt, prev: { live: { provider: 'http', url: 'https://live.example.kr', code: 'NOWPAGE' } } });
+  assert.deepEqual(r.errors, []);
+  const idx = r.files['index.html'], pr = r.files['practice.html'];
+  const count = (s, re) => (s.match(re) || []).length;
+  // '지금' 줄: 쪽마다 하나씩
+  assert.equal(count(idx, /<div class="lp-now" data-now hidden>/g), 1, "자리를 정하지 않은 쪽에도 '지금' 줄");
+  assert.match(idx, /<div class="lpk lpk-now"><div class="lp-now" data-now hidden>/, '기본 자리(몸 맨 앞)');
+  assert.equal(count(pr, /<div class="lp-now" data-now hidden>/g), 1, '자리를 정한 쪽은 그 자리 하나뿐');
+  assert.match(pr, /lpk-now--placed/); assert.doesNotMatch(idx, /lpk-now--placed/);
+  // 참여 막대: 쪽마다 하나씩(정한 쪽은 그 자리, 다른 쪽은 기본)
+  assert.equal(count(idx, /<aside class="lp-dock" data-dock/g), 1, '자리를 정하지 않은 쪽에도 참여 막대');
+  assert.equal(count(pr, /<aside class="lp-dock" data-dock/g), 1);
+  assert.match(pr, /lpk-dock--placed/); assert.doesNotMatch(idx, /lpk-dock--placed/);
+  // 공유 단추: 자리를 정한 쪽(index)은 막대에 또 두지 않고, 정하지 않은 쪽은 기본 막대에 둠 — practice는 막대 자리를 정했으므로 그 막대 그대로
+  assert.doesNotMatch(idx, /lpk-dock-share/);
+  const three = K.assemble({ 'index.html': one, 'practice.html': PAGE('<section><h2>질문</h2><div data-lp="qa"></div></section>') }, { ...META, features: ['qa', 'help'] }, { runtime: rt, prev: { live: { provider: 'http', url: 'https://live.example.kr', code: 'NOWPAGE' } } });
+  assert.match(three.files['practice.html'], /lpk-dock-share/, '공유 자리를 정하지 않은 쪽의 막대에는 공유 단추');
+  assert.doesNotMatch(three.files['index.html'], /lpk-dock-share/);
+});

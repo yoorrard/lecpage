@@ -16,6 +16,9 @@ async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarg
     if (reachable && /^api\.(netlify|vercel|github)\.com$/.test(u.host)) return m === 'OPTIONS' ? r.fulfill({ status: 204, headers: cors }) : json({ message: 'unauthorized' }, 401);
     if (u.host !== 'publish.mock.test') return r.abort();
     if (down) return r.abort('connectionrefused'); // 이 망에서 바로 배포 서버에 닿지 않음
+    // st.cut: 다음 파일 올리기에서 인터넷이 끊김(브라우저도 오프라인으로) → st.off인 동안 모든 요청이 끊김(시험이 st.off를 끄고 다시 온라인으로)
+    if (st.cut && m === 'PUT' && /\/blobs/.test(u.pathname)) { st.cut = false; st.off = true; await ctx.setOffline(true); }
+    if (st.off) return r.abort('internetdisconnected');
     if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
     st.calls.push(`${m} ${u.pathname}`);
     if (u.pathname === '/api/info') {
@@ -54,6 +57,8 @@ async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarg
       return json({ ok: true, got: list.length - failed.length, failed });
     }
     if (/\/publish$/.test(u.pathname)) return unsafe ? json({ error: { code: 'unsafe_site', message_ko: UNSAFE, rule: 'password', path: 'index.html' } }, 422) : json({ url: 'https://s-site1.example.pages.dev/', expiresAt: Date.now() + 60 * 864e5 });
+    // 참여 기능 방 묶기(/api/info에 live.url을 준 서버만 앱이 부름)
+    if (/^\/api\/sites\/[^/]+\/live$/.test(u.pathname) && m === 'POST' && info?.live?.url) return json({ url: info.live.url });
     return json({}, 404);
   });
   return st;
@@ -230,6 +235,64 @@ async function seed(p, script) {
     L.ok('instant full → exactly one primary button and one message about what to do', await p.locator('.publish .btn-primary:visible:not([disabled])').count() === 1 && await p.locator('.publish button.btn-primary:has-text("Netlify 계정으로 배포")').count() === 1 && !/받은 ZIP을 끌어다 놓아요/.test(box), (await p.locator('.publish .btn-primary:visible').allInnerTexts()).join(' | '));
     await p.locator('.publish').scrollIntoViewIfNeeded(); await p.screenshot({ path: L.OUT + 'instant-full-netlify.png' });
     L.ok('no page errors ⑨', errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
+  }
+  // ⑩ 보관 기간(60일)보다 먼 연수: 알려 주는 '다시 배포할 날'은 지워지는 날보다 앞(지워진 뒤 다시 배포하면 새 주소라 QR이 끊김). 한 번으로 닿지 않으면 그렇게 말함.
+  //    체크리스트와 배포 완료 카드가 같은 말 · 참여 기능 방까지 켠 바로 배포는 '내 연수' 목록에 [강사 화면]이 있음(배포한 강사 화면의 '키를 잃어버렸으면' 안내가 가리키는 곳)
+  for (const [days, reach] of [[78, true], [150, false]]) {
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } });
+    await server(ctx, { siteScripts: true, info: { live: { url: 'https://publish.mock.test/live', accepting: true } } });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    const date = new Date(Date.now() + days * 864e5 + 9 * 36e5).toISOString().slice(0, 10);
+    await p.goto(BASE, { waitUntil: 'load' });
+    await p.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
+    await L.makeWith(p, ANSWER(false).replace('2027-02-10', date)); await p.click('.st-info button:has-text("이 정보가 맞아요")');
+    await p.click('.head-tools button:has-text("배포하기")'); await p.waitForSelector('.publish', { timeout: 30000 }); await p.waitForTimeout(1500);
+    // 'M월 D일' → 오늘부터 며칠 뒤인지(해를 넘기면 다음 해)
+    const ahead = (m, d) => { const now = new Date(); let t = new Date(now.getFullYear(), m - 1, d); if (t < now - 864e5) t = new Date(now.getFullYear() + 1, m - 1, d); return Math.round((t - now) / 864e5); };
+    const judge = (s) => {
+      const at = /(\d+)월 (\d+)일쯤 다시 배포/.exec(s); const dies = /(\d+)월 (\d+)일에 지워진 뒤/.exec(s);
+      if (!at) return false;
+      const n = ahead(+at[1], +at[2]);
+      return reach ? /같은 주소로 연수 날까지 열려요/.test(s) && !!dies && n < ahead(+dies[1], +dies[2]) && n + 60 >= days
+        : /한 번 다시 배포해서는 연수 날까지 닿지 않아요/.test(s) && /\[다른 곳에 배포\]/.test(s) && n < 60;
+    };
+    const before = ((await p.locator('.ready-i:has(.ready-t:has-text("확인할 곳"))').innerText().catch(() => '')).match(/[^\n]*보관이라[^\n]*/) || [''])[0];
+    L.ok(`training ${days} days out · checklist: redeploy day is before the deletion day${reach ? ' and reaches the training day' : '; says one redeploy is not enough'}`, judge(before), before);
+    await p.click('.publish .btn-primary.btn-lg'); await p.waitForSelector('.success .big-url', { timeout: 60000 });
+    const card = (await p.locator('.success-top [role=alert]').first().innerText().catch(() => '')).replace(/\s+/g, ' ');
+    L.ok(`training ${days} days out · done card says the same`, judge(card), card);
+    if (reach) {
+      await p.goto(BASE, { waitUntil: 'load' }); await p.waitForSelector('.ld-mine', { timeout: 15000 });
+      const href = await p.locator('.ld-mine a:has-text("강사 화면")').getAttribute('href', { timeout: 5000 }).catch(() => '');
+      L.ok('instant deploy with its own participation room → [강사 화면] on the 내 연수 row', /s-site1\.example\.pages\.dev\/console\.html$/.test(href || ''), String(href));
+    }
+    L.ok(`no page errors ⑩-${days}`, errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
+  }
+  { // ⑪ 올리는 중에 인터넷이 끊김: '이 망에서 닿지 않아요·핫스팟'으로 바뀌거나 큰 버튼이 다른 곳(Netlify)으로 넘어가지 않고, 끊겼다는 것과 [다시 배포]가 이어서 한다는 것만. 다시 연결되면 같은 사이트에 이어서
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } }); const st = await server(ctx, { siteScripts: true, takeAll: true, reachable: true });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await seed(p, false);
+    st.cut = true;
+    await p.click('.publish .btn-primary.btn-lg');
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    let jumped = '';
+    for (let i = 0; i < 60 && !/배포하는 중에 인터넷이 끊겼어요/.test(await p.locator('.publish').innerText()); i++) {
+      const t = (await p.locator('.publish').innerText()).replace(/\s+/g, ' ');
+      if (/핫스팟|이 망에서 바로 배포 서버에 닿지/.test(t) || await p.locator('.publish button.btn-primary:has-text("Netlify")').count()) jumped = t.slice(0, 160);
+      await p.waitForTimeout(200);
+    }
+    const cutLine = (await p.locator('.publish .net-line').innerText().catch(() => '')).replace(/\s+/g, ' ');
+    L.ok('connection lost mid-upload: no "unreachable network · hotspot" text and no jump to another host', !jumped, jumped);
+    L.ok('connection lost mid-upload: says it dropped and that [다시 배포] continues once it is back', /배포하는 중에 인터넷이 끊겼어요/.test(cutLine) && /\[다시 배포\]/.test(cutLine) && /이어서/.test(cutLine), cutLine);
+    st.off = false; await ctx.setOffline(false);
+    await p.waitForSelector('.publish [role=alert]:has-text("배포를 끝내지 못했어요")', { timeout: 20000 });
+    const back = (await p.locator('.publish [role=alert]').first().innerText()).replace(/\s+/g, ' ');
+    L.ok('back online: the instant card is still picked and the note has the one primary [다시 배포]', await p.locator('.pub-mode-main.is-on').count() === 1 && /연결이 끊겼어요/.test(back) && (await p.locator('.publish .btn-primary:visible:not([disabled])').allInnerTexts()).join('|') === '다시 배포', back.slice(0, 200));
+    await p.click('.publish [role=alert] button:has-text("다시 배포")');
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await p.waitForSelector('.success .big-url', { timeout: 60000 });
+    L.ok('back online: [다시 배포] finishes on the same site (no second site)', st.sites === 1 && /s-site1\./.test(await p.locator('.success .big-url').innerText()), `sites ${st.sites}`);
+    L.ok('no page errors ⑪', errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
   }
   // 진짜 서버의 한도(pages 보기): 사이트 300MB·3,000개·파일 하나 20MB, 작은 파일(512KB 이하)은 8MiB씩 묶어 받음
   const REAL_LIMITS = { maxBytes: 300 * 1024 * 1024, maxFileBytes: 20 * 1024 * 1024, maxFiles: 3000, days: 60, bundle: { bytes: 8 * 1024 * 1024, itemBytes: 512 * 1024, files: 700 } };

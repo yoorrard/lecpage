@@ -4,7 +4,10 @@
 //   + 커넥트가 꺼진 Cloudflare 카드: 안내 하나(커넥트를 켜면 …) · 참여 기능을 따로 연결하라는 상자 없음 · 켜지면 버튼이 저절로 나옴
 // 실행: BASE=<앱 미리보기 주소> node tests/e2e/one-primary.js   (가짜 커넥트: 주소만 흉내, 포트 6623)
 const { chromium, fs, mockAll, openShare, connect, watch } = require('./h3.js');
+const L = require('./lib.js'); // (D) AI 선택 화면: 교재 넣기 → 가짜 AI로 만들기
 const path = require('path');
+const AI_ANSWER = '```html\n<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><title>큰 버튼 하나</title></head><body><main><section id="a" data-title="첫 화면"><h1>큰 버튼 하나</h1></section></main></body></html>\n```';
+const ANDROID = 'Mozilla/5.0 (Linux; Android 14; SM-S921N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
 const OUT = path.resolve(process.env.OUT || path.join(__dirname, '../../.out/verify/shots'), 'one-primary') + '/'; fs.mkdirSync(OUT, { recursive: true });
 let fails = 0;
 const ok = (name, cond, extra = '') => { if (!cond) fails++; console.log(`${cond ? 'PASS' : 'FAIL'} ${name}${extra ? ' :: ' + extra : ''}`); };
@@ -104,6 +107,31 @@ async function bridge(ctx, off = false) {
     ok('no script errors (C)', errs.filter((e) => !/Failed to load resource|ERR_CONNECTION_REFUSED/.test(e)).length === 0, JSON.stringify(errs).slice(0, 300));
     await ctx.close();
   } catch (e) { fails++; console.log('FAIL exception(C) :: ' + String(e && e.message || e).slice(0, 400)); }
+  // (D) AI 선택 화면도 큰 버튼은 하나. 휴대폰(lecpage 커넥트를 설치할 수 없음): 구독 버튼 대신 'PC에서 한다'는 한 줄 + [API 키 연결].
+  //     API 키를 연결해 둔 뒤(둘째 연수): 맨 위의 [Claude로 만들기] 하나뿐이고 구독 카드에는 큰 버튼이 없음
+  for (const phone of [true, false]) {
+    const tag = phone ? 'phone' : 'desktop';
+    try {
+      const ctx = await b.newContext(phone ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: ANDROID } : { viewport: { width: 1280, height: 844 } });
+      await L.mockAi(ctx);
+      const p = await ctx.newPage(); const errs = L.watch(p);
+      await L.startWithFile(p);
+      const first = await primaries(p, '.ai-pick'); const box = (await p.locator('.ai-pick').innerText()).replace(/\s+/g, ' ');
+      if (phone) {
+        ok('AI pick · phone, nothing connected: one primary [API 키 연결], says the subscription way is done on a PC, no install steps', first.length === 1 && first[0] === 'API 키 연결' && /PC에서 lecpage\.com/.test(box) && !/이 PC에서|Node\.js|계정으로 연결/.test(box), `${first.join(' | ')} :: ${box.slice(0, 200)}`);
+        await p.click('.ai-pick .btn-primary');
+        ok('AI pick · phone: [API 키 연결] opens the two key cards', await p.locator('details.ai-more').evaluate((d) => d.open) && await p.locator('.ai-card .ai-card-go:visible').count() === 2);
+      } else ok('AI pick · desktop, nothing connected: the one primary is the subscription button', first.length === 1 && /계정으로 연결/.test(first[0]), first.join(' | '));
+      await L.makeWith(p, AI_ANSWER);
+      await L.startWithFile(p, [L.FIX + '/guide.docx']);
+      await p.waitForSelector('.ai-pick .ai-card.is-main', { timeout: 15000 });
+      const again = await primaries(p, '.ai-pick');
+      const above = await p.evaluate(() => { const a = document.querySelector('.ai-pick .ai-card.is-main .btn-primary'); const s = document.querySelector('.ai-pick .ai-sub, .ai-pick .ai-phone'); return !!a && !!s && a.getBoundingClientRect().top < s.getBoundingClientRect().top; });
+      ok(`AI pick · ${tag}, key connected: one primary [Claude로 만들기] at the top, none in the subscription card`, again.length === 1 && again[0] === 'Claude로 만들기' && above && await p.locator('.ai-sub .btn-primary').count() === 0, again.join(' | '));
+      ok(`no script errors (D ${tag})`, errs.length === 0, JSON.stringify(errs).slice(0, 300));
+      await ctx.close();
+    } catch (e) { fails++; console.log(`FAIL exception(D ${tag}) :: ` + String(e && e.message || e).slice(0, 400)); }
+  }
   await b.close();
   process.exit(fails ? 1 : 0);
 })();

@@ -56,4 +56,4 @@ export function pptxZipLimits(nav) {
   return { maxEntryUncompressedBytes: top, maxTotalUncompressedBytes: Math.round(top * 1.25), maxMediaBytes: top };
 }
 export const tooBigFile = (f) => f.size > fileMaxMB(f.name) * MB;
-export const tooBigNote = (f) => `${fileMaxMB(f.name)}MB가 넘어 읽지 않았어요. 나눠서 올려 주세요.`;
+export const tooBigNote = (f) => `${fileMaxMB(f.name)}MB가 넘어 읽지 않았어요. 나눠서 넣어 주세요.`;

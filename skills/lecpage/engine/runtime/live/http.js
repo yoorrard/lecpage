@@ -16,6 +16,14 @@
  * server's hello says caps:['sync'] (HTTP otherwise and on any doubt), and a hidden participant tab (config.restHidden,
  * set by the participant page only) polls once in 5 minutes (at once when shown again). Polls themselves are unchanged
  * (wait 20 s). The clock is never taken from an answer the server held: a held answer may carry the time the wait began.
+ * After a long poll that brought a host state change (slide, poll opened/revealed/closed, timer, notice) the next one starts
+ * after ~1.5 s instead of the full rest, so the host's next step (reveal after open, the next slide) no longer waits out the
+ * 6–8 s rest. Only quick re-polls that cost a request count (they answered before the skipped rest was over): after 4 of
+ * those in 60 s the normal rest is back. Never while the server asks for a longer gap; answers that carry only
+ * participants' posts, quiet periods and interval polling are unchanged.
+ * A write that fails with a network error (or gets no answer for 3 s) while a realtime transport is thought to be open
+ * triggers one liveness check (a WebSocket ping, or GET state on SSE; 4 s): a silently dead network is noticed in seconds
+ * instead of after the 60 s heartbeat silence. Nothing extra is sent while writes succeed.
  */
 (function (root) {
   'use strict';
@@ -79,9 +87,12 @@
       var ctl = typeof AbortController === 'function' ? new AbortController() : null;
       if (opts.ctl) opts.ctl(ctl);
       var to = setTimeout(function () { if (ctl) ctl.abort(); }, opts.timeout || 12000);
+      // 쓰기가 SLOW_WRITE_MS 넘게 답이 없거나 망 오류로 실패하면, 실시간으로 이어져 있다고 보는 동안에는 바로 한 번 확인(checkAlive)
+      var write = method !== 'GET';
+      var slow = write && !opts.form && realtime() ? setTimeout(checkAlive, SLOW_WRITE_MS) : 0; // 파일 올리기는 오래 걸려도 정상
       return fetch(prefix + path, { method: method, headers: headers, body: body, signal: ctl ? ctl.signal : undefined, cache: 'no-store', credentials: 'omit', mode: 'cors' })
         .then(function (res) {
-          clearTimeout(to);
+          clearTimeout(to); clearTimeout(slow);
           readHint(res);
           if (opts.text && res.ok) return res.text();
           return res.text().then(function (txt) {
@@ -93,9 +104,30 @@
             return data;
           });
         }, function (e) {
-          clearTimeout(to);
+          clearTimeout(to); clearTimeout(slow);
+          if (write) checkAlive();
           throw L.error(e && e.name === 'AbortError' ? 'timeout' : 'network', '서버에 연결하지 못했어요.', { status: 0, retryable: true });
         });
+    }
+    /**
+     * 조용히 죽은 망(소켓은 닫히지 않았는데 아무것도 오가지 않음 — 와이파이가 약해짐·화면을 껐다 켬): 심장 박동은 60초 침묵 뒤에야 알아채
+     * 그동안 화면이 '연결됨'이라 말함. 실시간으로 이어져 있다고 보는 동안 쓰기가 망 오류로 실패하거나 SLOW_WRITE_MS 넘게 답이 없으면 그때 한 번 확인:
+     * 웹소켓은 ping(요청이 아니라 소켓 프레임)에 PROBE_MS 안에 무엇이든 오는지, SSE는 가벼운 GET /state. 답이 없으면 끊긴 것으로 보고 다시 이음(lost).
+     * 잘 될 때는 아무것도 더 보내지 않음(확인은 쓰기가 막혔을 때만, 한 번에 하나)
+     */
+    var SLOW_WRITE_MS = 3000, PROBE_MS = 4000, probing = false;
+    function realtime() { return !closed && (kind === 'ws' || kind === 'sse'); }
+    function checkAlive() {
+      if (probing || !realtime()) return;
+      probing = true;
+      var k = kind, since = Date.now();
+      var done = function (ok) { probing = false; if (!ok && !closed && kind === k) lost(k); };
+      if (k === 'ws') {
+        try { if (ws && ws.readyState === 1) ws.send('ping'); } catch (e) { /* ignore */ }
+        setTimeout(function () { done(lastMsg >= since); }, PROBE_MS);
+      } else {
+        request('GET', '/state', { timeout: PROBE_MS }).then(function () { done(true); }, function (e) { done(!!(e && e.status)); });
+      }
     }
     /** 서버의 묻기 간격 권고(X-Lec-Poll-Ms): 붐비는 날 길게. 2~60초만 받음 */
     function readHint(res) {
@@ -269,6 +301,15 @@
     }
     function stopPolling() { clear('poll'); clear('upgrade'); var c = lpCtl; lpCtl = null; if (c) { try { c.abort(); } catch (e) { /* ignore */ } } }
     function schedulePoll(ms) { clear('poll'); every = ms; timers.poll = setTimeout(pollOnce, ms); }
+    // 강사가 바꾼 것을 받은 뒤의 빠른 다시 묻기. 값을 치른 것만 셈: 건너뛴 쉬는 틈이 끝나기 전에 답이 온 것(평소라면 한 번에 받았을 것을
+    // 두 번에 받음 = 요청 하나 더). 그런 것이 지난 60초에 QUICK_MAX번이면 평소 쉬는 틈으로. 틈보다 오래 붙잡힌 것은 어차피 보냈을 요청이라 세지 않음
+    // (15초마다 쪽을 넘기는 강의가 몫을 다 써 버려 정작 투표 때 못 쓰지 않게)
+    var QUICK_MS = 1500, QUICK_MAX = 4, quickAt = [], quickFrom = 0, quickRest = 0;
+    function quickLeft() {
+      var now = Date.now();
+      quickAt = quickAt.filter(function (t) { return now - t < 60000; });
+      return quickAt.length < QUICK_MAX;
+    }
     /** 긴 대기 한 번: 바뀐 것이 있으면 바로, 없으면 WAIT초 뒤에 답이 옴. 결과는 동기화 차례를 붙잡지 않게 'snapshot' 사건으로 넘김 */
     function longPoll() {
       var t0 = Date.now();
@@ -293,6 +334,8 @@
       var useLong = longOk !== false && !U.isHidden() && (ctx.cursor() || 0) > 0, t0 = Date.now();
       Promise.resolve(useLong ? longPoll() : ctx.emit({ type: 'resync' })).then(function (r) {
         if (closed || kind !== 'poll') return;
+        // 빠른 다시 묻기가 건너뛴 쉬는 틈이 끝나기 전에 답함: 요청 하나를 더 쓴 것으로 셈
+        if (quickFrom) { if (Date.now() - quickFrom < quickRest) quickAt.push(Date.now()); quickFrom = 0; }
         if (r && r.error) {
           pollErr++;
           // the server did not answer at all (not an HTTP error): two in a row → offline. A long-poll cut after a while
@@ -310,6 +353,11 @@
         }
         // 긴 대기는 쉬는 틈만(바뀐 것이 오면 그 틈 동안 모아 다음 대기에서 받음). 간격 묻기는 바뀐 것 없이 이어지면 늘림
         var ms = useLong && !pollErr && longOk !== false ? Math.max(pollMs, hintMs || 0) : netErr ? Math.min(30000, 4000 * netErr) : U.pollDelay(pollMs, { err: pollErr, empty: emptyPolls, hint: hintMs, admin: !!ctx.adminKey() });
+        // 강사가 바꾼 것(쪽·투표 열기/공개/닫기·타이머·공지)을 실어 온 긴 대기 뒤에는 곧 또 바뀔 때가 많음: 쉬는 틈을 다 기다리면
+        // 다음 변화가 그만큼(6~8초) 늦게 보임 → 그런 답 뒤에는 QUICK_MS 뒤에 바로 다시 붙잡음. 값을 치른 것이 1분에 QUICK_MAX번이면 평소 쉬는 틈
+        // (위 quickLeft), 서버가 간격을 늘려 달라고 한 날(X-Lec-Poll-Ms가 평소 틈보다 김)에는 하지 않음.
+        // 참가자들의 글·응답만 온 답, 조용한 때, 간격 묻기, 오류 뒤는 그대로(방이 떠들썩해도 요청이 늘지 않음)
+        if (useLong && r && !r.error && r.state && longOk !== false && (hintMs || 0) <= pollMs && quickLeft()) { quickFrom = Date.now(); quickRest = ms; ms = QUICK_MS; }
         // 서버가 쉬라고 한 시간(Retry-After, 하루 한도·방 붐빔)은 지킴(최대 10분)
         var ra = r && r.error && +r.error.retryAfter;
         if (ra > 0) ms = Math.max(ms, Math.min(ra * 1000, 600000));

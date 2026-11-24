@@ -14,12 +14,23 @@ function deployTag(p) {
 }
 
 /**
+ * 대표 주소의 사이트에 참여 기능 방이 있는지: 바로 배포가 함께 켠 방(deploy.lecpage.adminKey — 연수 정보의 live는 비어 있음) 또는 강사가 연결한 서버.
+ * 배포한 강사 화면의 '키를 잃어버렸으면' 안내가 이 목록의 [강사 화면]을 가리키므로, 방이 있으면 늘 보여야 함
+ */
+function hasRoom(p) {
+  const d = p.deploy || {}; const s = d.sites?.[d.target];
+  if (s?.live === false) return false; // 참여 기능 없이 배포한 사이트
+  if (d.target === 'lecpage' && d.lecpage?.adminKey) return true;
+  return s?.live === true || (p.blueprint?.live?.features || []).length > 0;
+}
+
+/**
  * 배포한 연수 카드의 연수 당일 바로 가기: 강사 화면(참여 기능이 있을 때, 다른 화면은 모두 여기서)·발표 화면·주소와 QR.
  * 강사 화면을 누르면 이 기기에 기억한 관리자 키를 먼저 복사해 둠(새 탭이 열리기 전에, 붙여 넣기만 하게)
  */
 function DayLinks({ p, adminKey }) {
   const url = String(p.deploy.lastUrl).replace(/\/?$/, '/');
-  const live = (p.blueprint?.live?.features || []).length > 0;
+  const live = hasRoom(p);
   return (
     <div class="proj-day" role="group" aria-label={`${p.title || '연수'} 연수 당일`}>
       {live && <a class="btn btn-sm" href={url + 'console.html'} target="_blank" rel="noopener" onClick={() => adminKey && copy(adminKey, '관리자 키를 복사했어요. 강사 화면에 붙여 넣으세요.')}>강사 화면</a>}
@@ -43,11 +54,11 @@ export function Mine({ list, once, busyProps, reload }) {
   // 배포한 연수의 강사 화면 관리자 키(바로 배포는 연수에, 내 서버·시트는 이 기기의 키 보관함에). 보관함 모듈은 필요할 때만 받음
   const [keys, setKeys] = useState({});
   useEffect(() => {
-    const pub = list.filter((p) => p.deploy?.lastUrl && (p.blueprint?.live?.features || []).length);
+    const pub = list.filter((p) => p.deploy?.lastUrl && hasRoom(p));
     if (!pub.length) return;
     const now = Object.fromEntries(pub.filter((p) => p.deploy.lecpage?.adminKey).map((p) => [p.id, p.deploy.lecpage.adminKey]));
     setKeys(now);
-    const rest = pub.filter((p) => !now[p.id] && p.blueprint.live?.url);
+    const rest = pub.filter((p) => !now[p.id] && p.blueprint?.live?.url);
     if (rest.length) import('../lib/ai.js').then((m) => Promise.all(rest.map((p) => m.loadKey('live-admin:' + String(p.blueprint.live.url).replace(/\/+$/, '')).then((r) => [p.id, r.key])))).then((kv) => setKeys((k) => ({ ...k, ...Object.fromEntries(kv.filter((x) => x[1])) })), () => { });
   }, [list]);
   const delTag = del?.deploy?.lastUrl ? deployTag(del) : null;
@@ -77,12 +88,12 @@ export function Mine({ list, once, busyProps, reload }) {
         <h2 class="h-sub">"{del?.title || '이름 없는 연수'}"를 삭제할까요?</h2>
         {live
           ? <>
-            <p>이 브라우저에 있는 교재·그림·고친 내용과 배포 열쇠가 지워져요. 배포한 사이트는 {delTag.until ? `${delTag.until}까지` : '그대로'} 열려 있지만, 이 기기에서는 더 고치거나 다시 배포하거나 내릴 수 없어요.</p>
-            <p class="small">계속 관리하려면 먼저 열쇠까지 담아 파일로 저장해 두세요. 남에게 주지 않을 파일이에요.</p>
+            <p>이 브라우저에 있는 교재·그림·고친 내용과 관리자 키가 지워져요. 배포한 사이트는 {delTag.until ? `${delTag.until}까지` : '그대로'} 열려 있지만, 이 기기에서는 더 고치거나 다시 배포하거나 배포를 취소할 수 없어요.</p>
+            <p class="small">계속 관리하려면 먼저 관리자 키까지 담아 파일로 저장해 두세요. 남에게 주지 않을 파일이에요.</p>
           </>
           : <p>이 브라우저에 있는 교재·그림·고친 내용이 지워져요. 필요하면 먼저 파일로 저장해 두세요.</p>}
         <div class="btn-row">
-          {live && <button class="btn" onClick={async () => { try { saveFile(safeName(del.title) + '.lecpage', await exportProjectFile(del, { withKeys: true }), 'application/zip'); toast('열쇠까지 담아 저장했어요. 남에게 주지 마세요.'); } catch (e) { console.error(e); toast(e?.friendly ? e.message : '파일로 저장하지 못했어요. 저장 공간을 확인하고 다시 눌러 주세요.'); } }}>열쇠까지 파일로 저장</button>}
+          {live && <button class="btn" onClick={async () => { try { saveFile(safeName(del.title) + '.lecpage', await exportProjectFile(del, { withKeys: true }), 'application/zip'); toast('관리자 키까지 담아 저장했어요. 남에게 주지 마세요.'); } catch (e) { console.error(e); toast(e?.friendly ? e.message : '파일로 저장하지 못했어요. 저장 공간을 확인하고 다시 눌러 주세요.'); } }}>관리자 키까지 파일로 저장</button>}
           <button class="btn btn-danger" disabled={gone} aria-busy={gone ? 'true' : undefined} onClick={remove}>삭제</button><button class="btn btn-quiet" data-autofocus onClick={() => setDel(null)}>닫기</button>
         </div>
       </Dialog>

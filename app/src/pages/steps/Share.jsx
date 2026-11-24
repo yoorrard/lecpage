@@ -17,6 +17,7 @@ import { kitHtml } from '../../lib/venue.js';
 import { reach } from '../../lib/netcheck.js';
 import { FEATURES, LIVE_KEYS, deployView, patchDeploy, isV2, featuresOf, siteFeatures, toggleFeature, ensureCode, printSiteHtml, carryPatch } from '../../lib/site-meta.js';
 import { duplicateProject } from '../../lib/project.js';
+import { keepPlan } from '../../lib/keep-dates.js';
 import { whenText } from '@engine/src/hero-meta.js';
 
 const same = (u) => String(u || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
@@ -40,15 +41,25 @@ export function trainingEnd(meta = {}) {
 const md = (t) => new Date(t).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' });
 /**
  * 바로 배포의 보관 기간과 연수 날짜. 보관 기간이 정해진 서버(keepAlive=false: 마지막 배포 뒤 N일)에서만.
- * { gone: 이미 지워짐, short: 연수 날 전에 지워짐, until, again: 지금 다시 배포하면 늘어나는 날, enough: 다시 배포로 연수 날까지 닿는지, remindAt: 다시 배포할 때(연수 2주 전쯤) }
+ * { gone: 이미 지워짐, short: 연수 날 전에 지워짐, until, again: 지금 다시 배포하면 늘어나는 날, enough: 지금 다시 배포하면 연수 날까지 닿는지,
+ *   at: 다시 배포할 날(지워지기 전), reach: 그날 한 번으로 연수 날까지 닿는지 } — 날짜 셈은 lib/keep-dates.js
  */
 export function lecExpiry(p, info, now = Date.now()) {
   const lec = p.deploy?.lecpage; const fixed = info ? info.keepAlive === false : lec?.view === 'pages' || !!lec?.fixed;
   if (!fixed) return null;
   const days = info?.limits?.days || 60; const end = trainingEnd(deployView(p)?.meta);
   const until = lec?.expiresAt && p.deploy?.target === 'lecpage' ? lec.expiresAt : 0;
-  const again = now + days * DAY;
-  return { until, gone: !!until && until <= now, short: !!end && end > now && (until ? until < end : again < end), again, enough: !end || again >= end, remindAt: end ? Math.max(now, end - 14 * DAY) : 0, days, end };
+  return keepPlan({ now, days, until, end });
+}
+/**
+ * 연수 날 전에 지워질 때 언제 다시 배포할지 한두 문장(체크리스트·배포 완료 카드가 같은 말).
+ * 알려 주는 날은 지워지는 날보다 앞(지워진 뒤 다시 배포하면 새 주소라 QR이 끊김). 한 번으로 닿지 않으면 그렇게 말하고 다음 할 일을 알림
+ */
+export function keepAdvice(exp) {
+  const dies = exp.until || exp.again;
+  return exp.reach
+    ? `${md(exp.at)}쯤 다시 배포하면 같은 주소로 연수 날까지 열려요. ${md(dies)}에 지워진 뒤에 다시 배포하면 주소가 바뀌어요.`
+    : `한 번 다시 배포해서는 연수 날까지 닿지 않아요. ${md(exp.at)}쯤 다시 배포하고, 그 뒤에도 지워지기 전에 또 다시 배포해 주세요. 내 계정에 배포하면([다른 곳에 배포]) 기간 제한이 없어요.`;
 }
 
 /** 배포 전에 볼 곳(참여 기능 연결은 체크리스트 첫 줄이 맡음) */
@@ -58,8 +69,8 @@ function checks(p, exp) {
   if (exp?.short && !exp.gone) {
     const last = md(exp.end - DAY);
     out.push({ k: 'warn', t: exp.until
-      ? `지금 사이트는 ${md(exp.until)}까지라 연수 날(${last})에는 열리지 않아요. ${exp.enough ? `다시 배포하면 ${md(exp.again)}까지로 늘어나요.` : `${md(exp.remindAt)}쯤 다시 배포하면 연수 날까지 열려요.`}`
-      : `바로 배포는 배포한 날부터 ${exp.days}일 보관이라 연수 날(${last})에는 지워져 있어요. ${md(exp.remindAt)}쯤 다시 배포하면 연수 날까지 열려요.` });
+      ? `지금 사이트는 ${md(exp.until)}까지라 연수 날(${last})에는 열리지 않아요. ${exp.enough ? `다시 배포하면 ${md(exp.again)}까지로 늘어나요.` : keepAdvice(exp)}`
+      : `바로 배포는 배포한 날부터 ${exp.days}일 보관이라 연수 날(${last})에는 지워져 있어요. ${keepAdvice(exp)}` });
   }
   if (!p.metaChecked) out.push({ k: 'warn', t: 'AI가 교재에서 찾은 연수 정보(제목·날짜·장소)를 아직 확인하지 않았어요.', go: 2 });
   if (!b.meta.date) out.push({ k: 'warn', t: '날짜가 비어 있어요(QR 안내문·일정 파일에 쓰여요).', go: 2 });
@@ -164,7 +175,14 @@ export function StepShare({ p, update, go }) {
   });
   useEffect(() => { instantInfo().then((i) => { setAutoLive(!!i?.live?.url); setInfoSrv(i || null); }); }, []);
   const lecSite = p.deploy?.target === 'lecpage' ? p.deploy?.lecpage : null;
-  useEffect(() => { setRecords(null); setRoom(''); if (lecSite?.id) instantRecords(lecSite).then(setRecords); }, [lecSite?.id, bp?.live?.code]);
+  // recWait: 지난 기록을 받는 중인 약속(답이 오면 null). 받는 중에 [다시 배포하기]를 누르면 guard가 이 답을 기다렸다가 정함
+  const recWait = useRef(null); const recAsk = useRef(false);
+  useEffect(() => {
+    setRecords(null); setRoom('');
+    if (!lecSite?.id) { recWait.current = null; return; }
+    const w = instantRecords(lecSite).then((r) => { if (recWait.current === w) { recWait.current = null; setRecords(r); } return r; });
+    recWait.current = w;
+  }, [lecSite?.id, bp?.live?.code]);
   useEffect(() => { const pt = ensureCode(p); if (pt) update(pt); }, []); // 참여 기능 방 코드(처음 한 번)
   useEffect(() => { if (goAgain) (goNow.current || again.current)?.(); }, [goAgain]);
   // 고치기 화면의 [다시 배포하기]로 왔으면: 지난번 곳이 연결돼 있는 대로 바로 배포함(연결·바로 배포 서버 답을 읽는 동안 6초까지 기다림)
@@ -259,7 +277,22 @@ export function StepShare({ p, update, go }) {
   function guard(run, auto = false, kind = '') {
     // 지난 기록을 어떻게 할지 고르지 않고 다시 배포하면 먼저 물음(지우지는 않음). 사이트 ZIP 다운로드는 바로 배포의 기록과 상관없어 묻지 않고 바로 받음
     // (기록은 바로 배포 서버의 방에 있고, 그 방은 바로 배포한 사이트 주소에서만 열림)
-    if (old && !room && kind !== 'zip' && target === 'lecpage') { setAskRoom(true); return; } // 지난 기록은 바로 배포 방에만 있음(다른 곳에 배포할 때는 묻지 않음)
+    const mayAsk = !room && kind !== 'zip' && target === 'lecpage'; // 지난 기록은 바로 배포 방에만 있음(다른 곳에 배포할 때는 묻지 않음)
+    // 기록 수를 아직 받는 중(화면을 연 직후·고치기 화면의 [다시 배포하기]로 바로 온 때): 답을 기다렸다가 정함. 기다리지 않으면 누른 때에 따라 물음이 뜨기도, 안 뜨기도 함(늦어도 5초)
+    const w = recWait.current;
+    if (w && mayAsk && p.deploy?.lastUrl) {
+      if (recAsk.current) return; recAsk.current = true;
+      setProg({ step: '지난 기록을 확인하는 중', pct: 1 });
+      Promise.race([w, new Promise((ok) => setTimeout(() => ok(null), 5000))]).then((r) => {
+        recAsk.current = false; setProg(null);
+        if (r && oldRecords(p, r)) setAskRoom(true); else pass(run, auto);
+      });
+      return;
+    }
+    if (old && mayAsk) { setAskRoom(true); return; }
+    pass(run, auto);
+  }
+  function pass(run, auto) {
     if (liveOn && !liveReady && !auto && !skipLive) setAsk(() => run); else run(liveOn && !liveReady && !auto && skipLive ? { liveOff: true } : {});
   }
   const feats = featuresOf(p).filter((f) => LIVE_KEYS.includes(f));
@@ -387,13 +420,13 @@ export function StepShare({ p, update, go }) {
     rows.push(p.carryPending
       ? { k: 'past', title: '지난 배포', state: 'todo', line: <>다른 기기에서 {where}에 배포한 연수예요.</>,
         body: <>
-          <p class="small">이 파일에 그 사이트의 열쇠가 들어 있어요. 내가 저장한 파일이면 같은 주소·같은 QR로 이어서 배포해요. 남에게 받은 파일이면 [새 주소로 배포]를 골라 주세요.</p>
+          <p class="small">이 파일에 그 사이트의 관리자 키가 들어 있어요. 내가 저장한 파일이면 같은 주소·같은 QR로 이어서 배포해요. 남에게 받은 파일이면 [새 주소로 배포]를 골라 주세요.</p>
           <div class="btn-row">
             <button type="button" class="btn btn-sm btn-primary" onClick={() => { update((cur) => carryPatch(cur)); toast('같은 주소로 배포할 수 있어요.'); }}>같은 주소로 배포</button>
             <button type="button" class="btn btn-sm" onClick={() => update({ carryPending: undefined })}>새 주소로 배포</button>
           </div>
         </> }
-      : { k: 'past', title: '지난 배포', state: 'note', line: <>{where}에 배포돼 있었어요. 이 기기에는 그 사이트의 열쇠가 없어 여기서 배포하면 새 주소가 생겨요.</>,
+      : { k: 'past', title: '지난 배포', state: 'note', line: <>{where}에 배포돼 있었어요. 이 기기에는 그 사이트의 관리자 키가 없어 여기서 배포하면 새 주소가 생겨요.</>,
         btn: [open.past ? '접기' : '같은 주소로 하려면', () => toggle('past')],
         body: open.past && <p class="small">처음 배포한 기기에서 [파일로 저장]을 누르고 '내 다른 기기에서 같은 주소로 이어 배포하기'를 켜요. 그 파일을 여기서 열어 주세요. 새 주소로 배포하면 인쇄한 QR과 보낸 주소도 새것으로 바꿔야 해요.</p> });
   }
@@ -685,7 +718,7 @@ function Success({ p, bp, update, onEdit, onRepublish, onPrimary, busy, onZip, i
           <div class="row"><Mascot size={48} mood="happy" /><h2 class="h-sub" id="done-h" tabIndex={-1}>참가자에게 보낼 주소가 생겼어요</h2></div>
           <a class="big-url" href={shareUrl} target="_blank" rel="noopener">{url}</a>
           {p.deploy.target === 'lecpage' ? <p class="open-state"><span class="ok-dot" aria-hidden="true" />{exp?.until ? `${md(exp.until)}까지 열려 있어요. 다시 배포하면 그날부터 ${exp.days}일로 늘어나요.` : `방문이 있는 동안은 계속 열려 있어요. ${days}일 동안 아무도 오지 않으면 지워져요.`}</p> : <OpenState url={url} at={p.deploy.at} />}
-          {exp?.short && exp.until && <p class="small venue-day is-full" role="alert">{`연수 날(${md(exp.end - DAY)})에는 지워져 있어요. `}{exp.enough ? <>지금 다시 배포하면 {md(exp.again)}까지 열려요. <button type="button" class="btn btn-sm" disabled={!!busy} onClick={onRepublish}>다시 배포해 늘리기</button></> : `${md(exp.remindAt)}쯤 다시 배포하면 연수 날까지 열려요.`}</p>}
+          {exp?.short && exp.until && <p class="small venue-day is-full" role="alert">{`연수 날(${md(exp.end - DAY)})에는 지워져 있어요. `}{exp.enough ? <>지금 다시 배포하면 {md(exp.again)}까지 열려요. <button type="button" class="btn btn-sm" disabled={!!busy} onClick={onRepublish}>다시 배포해 늘리기</button></> : keepAdvice(exp)}</p>}
           {p.deploy.target === 'lecpage' && p.deploy.lecpage?.altUrl && <p class="small muted">기관·회사 망에서 안 열리면 이 주소로: <a href={p.deploy.lecpage.altUrl} target="_blank" rel="noopener">{p.deploy.lecpage.altUrl.replace(/^https:\/\//, '')}</a></p>}
           {pw && <p class="small">암호: <b class="mono">{pw}</b> · QR과 안내 문구의 주소는 암호 없이 바로 열려요.</p>}
           {fontNote && <p class="small" role="status">{fontNote}</p>}

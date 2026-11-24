@@ -15,8 +15,10 @@
 .lp-ax-id > span:last-child{display:grid;min-width:0;line-height:1.3}
 .lp-ax-id small{font-size:var(--fs-xs);font-weight:600;color:var(--muted-foreground)}
 .lp-ax-id b{font-size:var(--fs-md);font-weight:700;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lp-ax-act{margin-left:auto;display:flex;align-items:center;gap:6px}
+/* 단추 묶음은 줄어들지 않게(flex:none): 줄어들면 안의 단추가 묶음 밖으로 밀려 320~360px 휴대폰에서 쪽이 옆으로 넘쳤음. 좁으면 왼쪽 제목이 줄어듦(말줄임) */
+.lp-ax-act{flex:none;margin-left:auto;display:flex;align-items:center;gap:6px}
 .lp-ax-act .lp-btn{flex:none}
+@media (max-width:380px){.lp-ax-in{gap:8px}.lp-ax-id{gap:8px}.lp-ax-act{gap:2px}.lp-ax-act .lp-btn{padding-inline:10px}}
 .lp-btn-danger{background:var(--danger);color:var(--background);border-color:transparent}
 .lp-btn-danger:hover{background:color-mix(in srgb,var(--danger) 86%,var(--foreground))}
 .lp-btn[aria-pressed="true"]{background:var(--foreground);color:var(--background);border-color:var(--foreground)}

@@ -38,6 +38,9 @@ async function making(b) {
     const a = await dump(s);
     L.ok(`wipe ${mode}: 연수·파일·키 저장소가 비었음`, a.projects === 0 && a.blobs === 0 && a.kv === 0, JSON.stringify(a));
     L.ok(`wipe ${mode}: AI 작업 기록(lecpage-gen)도 비었음`, a.jobs === 0 && a.chat === 0, `jobs ${a.jobs} chat ${a.chat}`);
+    // 지운 설정 화면이 바로 지운 모습: 연결했던 AI 줄('… 연결됨')과 예전 사용량이 남아 보이지 않음(새로 고쳐야 바뀌면 안 지워진 것처럼 보임)
+    const shown = (await s.locator('.settings').innerText()).replace(/\s+/g, ' ');
+    L.ok(`wipe ${mode}: 설정 화면이 바로 지운 모습(연결됨 없음·'방금 모두 지웠어요')`, !/연결됨/.test(shown) && /API 키 연결 안 됨/.test(shown) && /방금 모두 지웠어요/.test(shown), (shown.match(/AI .{0,60}/) || [''])[0]);
     L.ok(`wipe ${mode}: 지운 뒤 AI를 더 부르지 않고 도는 작업이 없음`, posts.n === at && !a.busy, `${at} → ${posts.n}`);
     L.ok(`wipe ${mode}: 이 브라우저에 화면 밝기·통계 끄기만 남음`, a.ls.every((k) => ['lecpage:theme', 'lecpage:stats-off'].includes(k)) && a.ss.length === 0, [...a.ls, ...a.ss].join(','));
     if (mode === 'other') {

@@ -19,12 +19,15 @@ const PDF_ASSETS = (() => {
  * 엔진 안내를 앱 자리에 맞게 다듬음(엔진 문구는 Skill CLI와 함께 씀):
  * - 확장자만 .pdf·.pptx 등인 글 파일: 엔진은 문서 보안(DRM)으로 짐작하지만, 앞부분이 글자뿐이면 '그 형식이 아니에요'
  * - 한쇼(.show): 손상 안내 대신 한쇼에서 PDF·PPTX로 저장하는 법
+ * - 그 밖의 안내: 교재를 '올려 주세요' → '넣어 주세요'(앱의 용어)
  */
 function friendlier(m, name, bytes) {
   const ext = (name.split('.').pop() || '').toLowerCase();
   for (const e of m.errors || []) {
-    if (ext === 'show' || ext === 'shw') e.message_ko = '한쇼 파일은 바로 읽을 수 없어요. 한쇼에서 [다른 이름으로 저장]을 눌러 PDF나 PowerPoint(.pptx)로 저장한 뒤 올려 주세요.';
-    else if (e.code === 'drm' && looksText(bytes)) e.message_ko = `이름은 .${ext} 파일인데 안에는 글자만 들어 있어요. 원본 프로그램에서 ${ext === 'pdf' ? 'PDF로' : '그 형식으로'} 다시 저장해 올려 주세요. 메모장 글이면 .txt로 바꿔 넣으면 돼요.`;
+    if (ext === 'show' || ext === 'shw') e.message_ko = '한쇼 파일은 바로 읽을 수 없어요. 한쇼에서 [다른 이름으로 저장]을 눌러 PDF나 PowerPoint(.pptx)로 저장한 뒤 넣어 주세요.';
+    else if (e.code === 'drm' && looksText(bytes)) e.message_ko = `이름은 .${ext} 파일인데 안에는 글자만 들어 있어요. 원본 프로그램에서 ${ext === 'pdf' ? 'PDF로' : '그 형식으로'} 다시 저장해 넣어 주세요. 메모장 글이면 .txt로 바꿔 넣으면 돼요.`;
+    // 앱에서 교재는 '넣기'(docs/writing.md 4절). 엔진 문구는 Skill CLI와 함께 써서 '올려 주세요'
+    else if (e.code !== 'image-file' && e.message_ko) e.message_ko = e.message_ko.replace(/넣어 올려 주세요/g, '넣어 주세요').replace(/올려 주세요/g, '넣어 주세요');
   }
   return m;
 }
