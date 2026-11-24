@@ -1,5 +1,5 @@
 {
- "note": "예전 엔진 런타임 조각. 여기 적힌 것도 받습니다(이미 배포한 예전 사이트를 다시 올릴 때). 2026-11-20: 예전 방식(템플릿) 사이트의 움직임 효과(fx.js)를 엔진에서 지우며 적어 둠. 2026-11-22: 참가자 화면 Made with Lecpage 표시·참여 기능 서버 안내 한 곳·강사 화면 로그인·Retry-After로 바뀐 lecpage.js·console.js·live/core.js·live/http.js의 예전 판을 적어 둠. 2026-11-22(2): 여러 날 출석·이수로 바뀐 console.js·live/core.js·live/local.js·live/http.js의 예전 판. 2026-11-23: 꽉 찬 바닥글 아래 키트 묶음 색 잇기·개인정보 안내에 맞춘 주석·설문 알림 문구(lecpage.js), 사이트가 기기의 밝게·어둡게를 따르면 보조 쪽도 따르기(boot.js)로 바뀐 lecpage.js·boot.js의 예전 판. 2026-11-23(2): 참가자·강사 화면 실측 고침('지금' 줄 [투표하기]·교재 전체 화면·여러 날 출석 명단의 날짜 고르기·보드 사진 보기·별명 거절 알림·초점)으로 바뀐 lecpage.js·console.js·live/core.js·live/local.js의 예전 판. 2026-11-24(조각의 kept는 UTC 날짜라 2026-11-23): 수업 중 요청 줄이기(소켓부터 여는 접속·소켓 하나로 받는 첫 동기화·가려진 참가자 화면 쉬기), 붙잡았다 온 답으로는 시계를 맞추지 않기, 다른 쪽 투표를 '지금' 줄에 알리기(한글 이름의 쪽 포함)로 바뀐 lecpage.js·live/core.js·live/http.js의 예전 판(운영 중인 5029d91의 것. 그 사이에 만들었다 뺀 판 — 긴 대기의 기다림 올리기 — 은 배포한 적이 없어 적지 않음). 보안 문제로 막아야 하는 판은 지우세요.",
+ "note": "예전 엔진 런타임 조각. 여기 적힌 것도 받습니다(이미 배포한 예전 사이트를 다시 올릴 때). 2026-11-20: 예전 방식(템플릿) 사이트의 움직임 효과(fx.js)를 엔진에서 지우며 적어 둠. 2026-11-22: 참가자 화면 Made with Lecpage 표시·참여 기능 서버 안내 한 곳·강사 화면 로그인·Retry-After로 바뀐 lecpage.js·console.js·live/core.js·live/http.js의 예전 판을 적어 둠. 2026-11-22(2): 여러 날 출석·이수로 바뀐 console.js·live/core.js·live/local.js·live/http.js의 예전 판. 2026-11-23: 꽉 찬 바닥글 아래 키트 묶음 색 잇기·개인정보 안내에 맞춘 주석·설문 알림 문구(lecpage.js), 사이트가 기기의 밝게·어둡게를 따르면 보조 쪽도 따르기(boot.js)로 바뀐 lecpage.js·boot.js의 예전 판. 2026-11-23(2): 참가자·강사 화면 실측 고침('지금' 줄 [투표하기]·교재 전체 화면·여러 날 출석 명단의 날짜 고르기·보드 사진 보기·별명 거절 알림·초점)으로 바뀐 lecpage.js·console.js·live/core.js·live/local.js의 예전 판. 2026-11-24(조각의 kept는 UTC 날짜라 2026-11-23): 수업 중 요청 줄이기(소켓부터 여는 접속·소켓 하나로 받는 첫 동기화·가려진 참가자 화면 쉬기), 붙잡았다 온 답으로는 시계를 맞추지 않기, 다른 쪽 투표를 '지금' 줄에 알리기(한글 이름의 쪽 포함)로 바뀐 lecpage.js·live/core.js·live/http.js의 예전 판(운영 중인 5029d91의 것. 그 사이에 만들었다 뺀 판 — 긴 대기의 기다림 올리기 — 은 배포한 적이 없어 적지 않음). 2026-11-24(2): 독립 점검(강의 당일·처음 쓰는 강사)에서 고친 것 — 예정 종료 뒤 2시간까지 출석·'지금' 띠 유지, 강사 화면이 참가자로 세어지지 않게, 입실 없는 퇴실 확인, 긴 대기에서 바뀐 것을 받은 뒤 곧 다시 묻기, 조용히 끊긴 연결 알아채기, 따라 넘기기 다시 켜기, 실습 진행 사람 수, 미리보기의 접속 확인 — 로 바뀐 lecpage.js·console.js·check.js·live/core.js·live/http.js의 예전 판(운영 중인 e650a1d의 것). 보안 문제로 막아야 하는 판은 지우세요.",
  "segments": [
   {
    "name": "fx/core.js",
@@ -611,13 +611,6 @@
    "kept": "2026-11-23"
   },
   {
-   "name": "boot.js",
-   "len": 1883,
-   "head": "/* lecpage boot: 첫 그리기 전에 테마·움직임",
-   "sha256": "ede94a1528461938a2fd865199f1d7b17b53d1393db2427f67b04ec36351eeee",
-   "kept": "2026-11-23"
-  },
-  {
    "name": "check.js",
    "len": 11478,
    "head": "/* lecpage check — 접속 확인: 연수에 쓰는",
@@ -650,48 +643,6 @@
    "len": 28798,
    "head": "/*! lecpage live — provider 'htt",
    "sha256": "f0677defa612cc952c01585d60931c7301c9a0b9d9990410df46c2ff996437ab",
-   "kept": "2026-11-23"
-  },
-  {
-   "name": "live/local.js",
-   "len": 14075,
-   "head": "/*! lecpage live — provider 'loc",
-   "sha256": "7e24419a57b39b1ada4a2c6c72a776fc0f14b6864f5783e5e1232033ec9045ea",
-   "kept": "2026-11-23"
-  },
-  {
-   "name": "live/sheets.js",
-   "len": 8860,
-   "head": "/*! lecpage live — provider 'she",
-   "sha256": "0695122b538d0c52464fb2d2b26150f5078110e4b603952b9a86c3d57b138fdf",
-   "kept": "2026-11-23"
-  },
-  {
-   "name": "live/supabase.js",
-   "len": 22582,
-   "head": "/*! lecpage live — provider 'sup",
-   "sha256": "d7a5cd88ff7733109c71ed1a292fe0f2e2f2d0dfb42298b3ea9cca23cf441e58",
-   "kept": "2026-11-23"
-  },
-  {
-   "name": "screen.js",
-   "len": 42978,
-   "head": "/* lecpage screen — 발표 화면: 교재 쪽(",
-   "sha256": "a44a13266c03b82f5c9e4e2f935bf4c56afdb6acfb33f927329f5a0ada993c02",
-   "kept": "2026-11-23"
-  },
-  {
-   "name": "unlock.js",
-   "len": 7284,
-   "head": "/*! lecpage unlock — 암호로 잠근 연수 사",
-   "sha256": "35ca8f60692c9538729ff15e54943e7d15f6c99f50e39ec825ff9a0b7fbafd8e",
-   "kept": "2026-11-23"
-  },
-  {
-   "name": "vendor/qrcode.js",
-   "len": 58037,
-   "head": "/*!\n * qrcode-generator 1.4.4 (Q",
-   "sha256": "44377a74aa7168f39dad0c4856151a780db12582cbcc85c3b86db1b64c70b631",
    "kept": "2026-11-23"
   }
  ]
