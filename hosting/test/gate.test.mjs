@@ -89,6 +89,29 @@ test('쓴 행 수(무료 하루 10만 행): 사이트가 알린 행 수가 오�
   assert.equal(d.rw - d.gw, rep0 + 570);
   assert.ok(d.rw > 85000 + 570);
 });
+test('쓴 행 수: 배포 목록을 받을 때(deploy-check) 쓸 행 어림과 지난번 뒤 쓴 행을 오늘 몫에 바로 넣고, 사이트 하루 몫·85% 선에서 거절', async () => {
+  const { call } = gate({ DAILY_REQUEST_BUDGET: 100000, SITE_ROWS_PER_DAY: 1000 });
+  assert.equal((await reserve(call, 'abcdefghjk')).status, 200);
+  const day = async () => { const d = (await call('GET', 'overview')).body.today; return (d.rw || 0) - (d.gw || 0); };
+  const r0 = await day();
+  // 쓰기 전에 셈: 받은 목록의 어림(rows)과 사이트가 지난번 뒤 쓴 행(rw)이 함께 들어감
+  assert.equal((await call('POST', 'deploy-check', { site: 'abcdefghjk', rows: 300, rw: 40 })).status, 200);
+  assert.equal(await day(), r0 + 340);
+  assert.equal((await call('POST', 'deploy-check', { site: 'abcdefghjk', rows: 600 })).status, 200);
+  // 이 사이트의 오늘 몫(1,000)을 넘는 목록은 거절(rate_limited · site_rows · 이 사이트만), 그때 알린 쓴 행은 그대로 넣음
+  const no = await call('POST', 'deploy-check', { site: 'abcdefghjk', rows: 200, rw: 7 });
+  assert.equal(no.status, 429); assert.equal(no.body.error.code, 'rate_limited'); assert.equal(no.body.error.reason, 'site_rows'); assert.equal(no.body.error.scope, 'you');
+  assert.ok(no.body.error.retryAt > Date.now()); assert.equal(no.body.error.retryAt % 864e5, 0, '다음 UTC 날');
+  assert.equal(await day(), r0 + 340 + 600 + 7);
+  assert.equal((await call('POST', 'deploy-check', { site: 'abcdefghjk', rows: 100 })).status, 200, '남은 몫 안이면 됨');
+  assert.equal((await call('POST', 'deploy-check', { site: 'otherjhkmn', rows: 900 })).status, 200, '다른 사이트는 따로 셈');
+  assert.equal((await call('POST', 'deploy-check', { site: 'otherjhkmn', rows: 0 })).status, 200, '쓸 행이 없는 목록은 몫과 상관없음');
+  // 오늘 쓴 행이 85% 선을 넘을 목록은 모든 사이트에서 거절(참여 기능 방의 글·출석 쓰기 몫을 남김). 이미 배포한 사이트·방은 그대로
+  await call('POST', 'site', { id: '', rw: 84000 });
+  const full = await call('POST', 'deploy-check', { site: 'thirdmnpqr', rows: 900 });
+  assert.equal(full.status, 429); assert.equal(full.body.error.reason, 'rows'); assert.equal(full.body.error.scope, 'everyone');
+  assert.match(full.body.error.message_ko, /참여 기능은 그대로/);
+});
 test('쓴 행 수: 유료 요금제에는 하루 행 한도가 없어 몫에 넣지 않음', async () => {
   const { call } = gate({ PLAN: 'paid', DAILY_REQUEST_BUDGET: 100000 });
   assert.equal((await reserve(call, 'abcdefghjk')).status, 200);

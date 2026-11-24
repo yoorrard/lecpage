@@ -117,8 +117,10 @@ test('실제 모양의 사이트: 새 배포·다시 배포·배포하기 화면
   const del = await measure(e, () => req(base, 'DELETE', `/api/sites/${first.r.site.id}`, { key: first.r.site.key }));
   assert.ok([202, 204].includes(del.r.status), String(del.r.status));
   out.remove = del.d;
-  // 지울 때 쓴 행(지우기도 쓴 행으로 청구됨): 통째 지우기 전에 줄 수를 세어 알림. 묶음으로 쓴 뒤로는 사이트 하나가 스무 줄 안쪽
-  assert.ok(del.d.rw >= 3 && del.d.rw <= 25, `배포 취소가 쓴 행 수: ${del.d.rw}`);
+  // 지울 때 쓴 행(지우기도 쓴 행으로 청구됨): 통째 지우기 전에 줄 수를 세어 알림. 묶음으로 쓴 뒤로는 사이트 하나가 스무 줄 안쪽.
+  // 배포 목록을 받을 때 나중에 지울 줄까지 미리 셌으므로(deploy-check rows) 그 몫 안이면 여기서는 0일 수 있음 — 세 번을 합쳐 봄
+  assert.ok(del.d.rw <= 25, `배포 취소가 쓴 행 수: ${del.d.rw}`);
+  assert.ok(first.d.rw + again.d.rw + del.d.rw >= 10, `새 배포·다시 배포·취소에 센 행: ${first.d.rw} + ${again.d.rw} + ${del.d.rw}`);
 
   if (process.env.COST_OUT) writeFileSync(process.env.COST_OUT, JSON.stringify(out, null, 1));
   console.log(JSON.stringify(out));

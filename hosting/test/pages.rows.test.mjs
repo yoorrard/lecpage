@@ -73,6 +73,7 @@ test('사이트 하나가 하루 쓴 행 몫을 태우지 못하고, 보통 배�
     await settle(1200);
     const t2 = await today(base, ADMIN);
     const total = siteRows(t2) - siteRows(t0);
+    console.log(`목록 ${cycles}번 받음 → 거절 · 지우기 전 Gate가 본 행 ${seen} · 모두 ${total}`);
     assert.ok(total <= 20000 + 2000, `사이트 하나가 쓴 행 ${total}`);
     assert.ok(seen >= total * 0.9, `지우기 전에 Gate가 본 행 ${seen} / 모두 ${total}`);
   });
@@ -94,6 +95,10 @@ test('사이트 하나가 하루 쓴 행 몫을 태우지 못하고, 보통 배�
     const t0 = await today(base, ADMIN);
     const first = await deploy(base, s, { ...fixed, ...make(0) });
     assert.equal(first.status, 200, JSON.stringify(first.body));
+    await settle(800);
+    const one = siteRows(await today(base, ADMIN)) - siteRows(t0);
+    console.log(`새 배포 한 번(HTML 66쪽 · 파일 ${Object.keys(fixed).length + pages + 6}개)에 센 행 ${one}`);
+    assert.ok(one < 400, `새 배포 한 번에 센 행 ${one}`);
     for (let v = 1; v <= 45; v++) {
       const r = await deploy(base, s, { ...fixed, ...make(v) });
       assert.equal(r.status, 200, `다시 배포 ${v}: ${JSON.stringify(r.body).slice(0, 300)}`);
@@ -101,6 +106,7 @@ test('사이트 하나가 하루 쓴 행 몫을 태우지 못하고, 보통 배�
     }
     await settle(800);
     const used = siteRows(await today(base, ADMIN)) - siteRows(t0);
+    console.log(`보통 사이트 배포 46번에 센 행 ${used}`);
     assert.ok(used < 20000 * 0.5, `46번 배포에 센 행 ${used}`);
   });
 });

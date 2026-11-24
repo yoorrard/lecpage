@@ -63,7 +63,7 @@ const PAST_PATHS = 2000;
 /** 그 경로들의 글자 수 합 상한(오래된 것부터 버림): 사이트 상태 한 줄(pstate)이 저장소의 줄 크기 한도(2MB)에 닿지 않게. 보통 사이트는 수천 자라 닿지 않음 */
 const PAST_CHARS = 200000;
 /** 행 어림(rowsEstimate): 목록 하나가 파일과 상관없이 쓰는 줄(목록·사이트 정보·지난 목록 지우기·공개·알람·예전 표 옮기기)과, 자산 표 묶음을 한 번 다시 쓸 때의 줄 */
-const LIST_ROWS = 20;
+const LIST_ROWS = 12;
 const PACK_ROWS = 2;
 /** 미리보기 카드 그림으로 쓸 만한 크기(작은 아이콘은 뺌) */
 const OG_MIN_BYTES = 8000;
