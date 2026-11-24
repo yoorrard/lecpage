@@ -62,6 +62,9 @@ const BIG_FILE_CALLS = 3;
 const PAST_PATHS = 2000;
 /** 그 경로들의 글자 수 합 상한(오래된 것부터 버림): 사이트 상태 한 줄(pstate)이 저장소의 줄 크기 한도(2MB)에 닿지 않게. 보통 사이트는 수천 자라 닿지 않음 */
 const PAST_CHARS = 200000;
+/** 행 어림(rowsEstimate): 목록 하나가 파일과 상관없이 쓰는 줄(목록·사이트 정보·지난 목록 지우기·공개·알람·예전 표 옮기기)과, 자산 표 묶음을 한 번 다시 쓸 때의 줄 */
+const LIST_ROWS = 20;
+const PACK_ROWS = 2;
 /** 미리보기 카드 그림으로 쓸 만한 크기(작은 아이콘은 뺌) */
 const OG_MIN_BYTES = 8000;
 const MANIFEST_MAX = 1024 * 1024;
@@ -195,6 +198,8 @@ export class Site extends DurableObject {
   pagesDelta() {
     const p = this.pagesClient || { calls: 0, limited: 0 };
     const d = { pc: p.calls - (this.pcSent || 0), pz: p.limited - (this.pzSent || 0), rc: (this.roomCalls || 0) - (this.rcSent || 0), rw: this.rowsW - this.rwSent };
+    // 배포 목록을 받을 때 Gate에 미리 넣은 행 어림(rwPaid)만큼은 다시 알리지 않음(두 번 세지 않게. 이 객체가 내려가 잊으면 넉넉히 세는 쪽)
+    const paid = Math.min(d.rw, this.rwPaid || 0); d.rw -= paid; this.rwPaid = (this.rwPaid || 0) - paid;
     this.pcSent = p.calls; this.pzSent = p.limited; this.rcSent = this.roomCalls || 0; this.rwSent = this.rowsW;
     return d;
   }
@@ -301,6 +306,23 @@ export class Site extends DurableObject {
     // 작은 파일은 DEFER_TOTAL만큼 모일 때마다 한 번에 올림(마지막 남은 것은 공개할 때 같이)
     return PUBLISH_CALLS + BIG_FILE_CALLS * (big + Math.floor(small / this.deferTotal));
   }
+  /** (Pages 보기) 파일마다 이 객체 저장소에 줄을 쓰는 파일: 여기 두는 것(HTML·영상·소리)과 .js(사이트 스크립트 표시 jsk) */
+  rowFile(meta, path) { return this.keepsHere(meta, path) || typeOf(path)?.kind === 'js'; }
+  /**
+   * 이 목록이 쓸 행 어림(Gate가 쓰기 전에 오늘 몫에 넣음): 받을 파일 중 여기 두는 것은 1MiB 줄마다, .js는 표시 한 줄 — 나중에 치울 때 지우는 것까지 두 배.
+   * Pages에 올리는 큰 파일·모아 올리기마다 자산 표 묶음을 다시 씀(PACK_ROWS). 목록·사이트 정보·공개·알람 몇 줄은 LIST_ROWS
+   */
+  rowsEstimate(meta, files, missing) {
+    const want = new Set(missing); let n = LIST_ROWS; let small = 0;
+    for (const [path, sha, size] of files) {
+      if (!want.has(sha)) continue;
+      want.delete(sha);
+      if (this.keepsHere(meta, path)) { n += 2 * Math.max(1, Math.ceil(size / CHUNK)); continue; }
+      if (typeOf(path)?.kind === 'js') n += 2;
+      if (size > this.deferMax) n += PACK_ROWS; else small += size;
+    }
+    return n + PACK_ROWS * Math.floor(small / this.deferTotal);
+  }
   /** 목록에서 아직 받지 않은 sha256(겹치지 않게, 목록 순서대로). Pages 보기는 Pages에 올린 기록도 봄 */
   missingFor(meta, files, have = this.blobSizes()) {
     if (!this.isPages(meta)) return missingBlobs(files, have);
@@ -329,6 +351,8 @@ export class Site extends DurableObject {
     this.manifests.set(id, m);
     return m;
   }
+  /** 지금 배포·준비 중인 배포에 아직 있는 내용인지(받거나 올리는 사이 목록이 바뀌었을 수 있음) */
+  wantedSha(sha, meta = this.load()) { return !!meta && [meta.pending, meta.current].some((d) => d && this.manifest(d)?.shas.has(sha)); }
   /** 다 올라온 파일: sha256 → 크기 */
   blobSizes() {
     return new Map(this.sql.exec('SELECT sha, total FROM blob WHERE i = 0').toArray().map((r) => [r.sha, r.total]));
@@ -452,6 +476,10 @@ export class Site extends DurableObject {
     if (this.isPages(first) && headerRules(man.files.map(([p]) => p)).length > PAGES_HEADER_RULES) {
       throw new HttpError('bad_path', '파일 이름 끝(.png 같은 확장자)의 대문자·소문자 모양이 너무 여러 가지예요. 확장자를 소문자로 맞춰 다시 배포해 주세요.');
     }
+    // Pages 보기: 파일마다 이 객체 저장소에 줄을 쓰는 파일(HTML·영상·소리·.js)의 수 → 목록 하나가 쓰는 행 수에 상한(쪽 그림·글꼴 조각은 들지 않음)
+    if (this.isPages(first) && man.files.filter(([p]) => this.rowFile(first, p)).length > this.cfg.maxKeptFiles) {
+      throw new HttpError('too_many_files', `HTML·영상·소리·스크립트(.js) 파일은 모두 합쳐 ${this.cfg.maxKeptFiles}개까지 올릴 수 있어요. 쪽(HTML)을 줄여 다시 배포하거나 내 계정에 배포해 주세요.`, { max: this.cfg.maxKeptFiles });
+    }
     return this.exclusive(async () => {
       const meta = this.load();
       if (!this.alive(meta)) throw new HttpError('not_found');
@@ -465,10 +493,14 @@ export class Site extends DurableObject {
         throw new HttpError('too_large', `영상·소리 파일은 모두 합쳐 ${Math.round(this.cfg.maxMediaBytes / 1024 / 1024)}MB까지예요. 영상은 유튜브 같은 곳에 올려 링크로 넣어 주세요.`);
       }
       // Gate에 한 번만 물음: 운영자 멈춤(다시 배포도 받지 않음, 이미 공개한 판은 그대로 열림) · Pages API 5분 창 · 연수 날짜·인원(그날이 찼으면 올리기 전에 알림, 바뀌면 갈아 끼움) · 저장량
+      // 쓴 행도 함께: 지난번 알린 뒤 쓴 것(pagesDelta)과 이 목록이 쓸 어림(rows). Gate가 쓰기 전에 오늘 몫·이 사이트의 하루 몫을 봄
+      const rows = this.rowsEstimate(meta, man.files, missing);
       const chk = await this.gate('POST', 'deploy-check', {
         site: meta.site, booking: body.booking && typeof body.booking === 'object' ? body.booking : null,
         pages: this.isPages(meta) ? this.pagesEstimate(meta, man.files, missing) : 0, split: Array.isArray(body.caps) && body.caps.includes('split'),
+        rows, ...this.pagesDelta(),
       });
+      this.rwPaid = (this.rwPaid || 0) + rows;
       if (chk.bytes - meta.bytes + keep > this.cfg.maxTotalBytes) {
         // 아직 한 번도 배포하지 않은 사이트(방금 만든 빈 사이트)면 기록을 남기지 않음. 앱은 다음에 새 주소로 다시 만듦
         if (!meta.current) await this.wipe();
@@ -681,6 +713,8 @@ export class Site extends DurableObject {
       const cssPath = paths.find((p) => extOf(p) === 'css');
       if (cssPath) checkCss(new TextDecoder().decode(bytes), cssPath);
       if (!this.load()) throw new HttpError('not_found'); // 받는 사이에 사이트가 지워짐
+      // 기다리는 사이(flushPool·검사) 새 목록이 이 내용을 빼고 치웠으면(sweep) 적지 않음: 다시 목록에 오면 처음부터 받아 검사함(사이트 스크립트 표시가 빠진 채 자산 표에만 남지 않게)
+      if (!this.wantedSha(sha)) return;
       if (own) { this.sql.exec('INSERT OR REPLACE INTO jsk (sha, own) VALUES (?, 1)', sha); this.jskMem.set(sha, true); }
       const parts = exts.length ? base64Parts(bytes) : null;
       const items = exts.map((e) => ({ ext: e, hash: pagesHash(bytes, e, parts), parts, contentType: contentTypeOf(paths.find((p) => rawExt(p) === e)) }));
@@ -704,6 +738,9 @@ export class Site extends DurableObject {
           // 큰 파일(512KB 넘는 쪽 그림·사진·글꼴·교재 원본)이 든 사이트는 배포가 끝나지 않았음(2026-11-23 실제 서버에서 확인). 순간 오류면 PagesClient가 한 번 더 하고(twice), 그래도 안 되면 이 파일 받기를 실패로
           await pc.upsertHashes(up.map((x) => x.hash));
         }
+        // 올리는 사이 목록이 바뀌어 치워졌으면(사이트 스크립트 표시도 지워짐) 적지 않음 → 다시 목록에 오면 다시 받아 검사
+        if (!this.load()) throw new HttpError('not_found');
+        if (!this.wantedSha(sha) || (own && !this.isOwnJs(sha))) return;
         for (const x of items) this.paSet(sha, x.ext, x.hash, size);
         this.flushPa();
       }
@@ -721,7 +758,8 @@ export class Site extends DurableObject {
     for (const a of all) if (missing.has(a.x.hash) && !seen.has(a.x.hash)) { seen.add(a.x.hash); up.push(a.x); }
     if (up.length) { await pc.upload(up); await pc.upsertHashes(up.map((x) => x.hash)); }
     if (!this.load()) throw new HttpError('not_found'); // 올리는 사이에 사이트가 지워짐
-    for (const a of all) this.paSet(a.sha, a.x.ext, a.x.hash, a.size);
+    // 올리는 사이 새 목록이 치운 것(sweep이 메모리와 사이트 스크립트 표시를 함께 지움)은 적지 않음: 다시 목록에 오면 처음부터 받아 검사함
+    for (const a of all) if (this.deferred.has(a.sha) && this.wantedSha(a.sha)) this.paSet(a.sha, a.x.ext, a.x.hash, a.size);
     this.flushPa();
     for (const a of all) { const d = this.deferred.get(a.sha); if (d) { this.deferred.delete(a.sha); this.deferredBytes -= d.size; } }
   }
@@ -1295,9 +1333,11 @@ export class Site extends DurableObject {
     // 이 주소는 모든 사이트가 같이 쓰는 출처라 사이트가 직접 쓴 스크립트는 내보내지 않음(엔진 런타임만). 못 쓰는 경로·목록에 없는 .js는 Pages에 묻지 않음
     if (this.isPages(meta) && !(path && isMedia(path) && man.files.has(path))) {
       if (!path) return noFilePage(head);
-      if (typeOf(path)?.kind === 'js') { const f = man.files.get(path); if (!f || this.isOwnJs(f[0])) return noFilePage(head); }
+      // .js: 표시(jsk)가 빠져도 사이트 스크립트가 나가지 않게, Worker가 가져온 내용이 엔진 런타임(지금 판 + runtime-history)인지 확인한 뒤에만 내보냄(x-lp-js, index.js fromPages)
+      let js = '';
+      if (typeOf(path)?.kind === 'js') { const f = man.files.get(path); if (!f || this.isOwnJs(f[0])) return noFilePage(head); js = f[0]; }
       const pu = this.ps(meta).url;
-      return pu ? new Response(null, { status: 204, headers: { 'x-lp-proxy': pu, 'cache-control': 'no-store' } }) : notFoundPage(head);
+      return pu ? new Response(null, { status: 204, headers: { 'x-lp-proxy': pu, ...(js ? { 'x-lp-js': js } : {}), 'cache-control': 'no-store' } }) : notFoundPage(head);
     }
     let status = 200; let name = path; let hit = path ? man.files.get(path) : null;
     if (!hit && path && !extOf(path)) { name = `${path}.html`; hit = man.files.get(name); }

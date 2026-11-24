@@ -362,14 +362,32 @@ export class Gate extends DurableObject {
    * 다시 올릴 때(Site.createDeploy) 한 번에: 멈춤 확인 → Pages API 5분 창 → 예약 갈아 끼우기 → 저장량.
    * 예전에는 usage와 book을 따로 불러 DO 요청이 둘이었음
    */
-  deployCheck({ site, booking, pages = 0, split = false }) {
+  /**
+   * 배포 목록을 받기 전에 한 번. rows: 이 목록이 쓸 행 어림(site.js rowsEstimate) — 받으면 바로 오늘 쓴 행(rw)과 이 사이트의 하루 몫에 넣음(쓰기 전에 셈: 85% 선이 쓴 뒤가 아니라 쓰기 전에 봄).
+   * pc·pz·rc·rw: 사이트가 지난번 알린 뒤 쓴 것(거절해도 넣음). 이 사이트의 하루 몫(siteRowsPerDay)을 넘거나 오늘 쓴 행이 85% 선을 넘으면 거절(이미 배포한 사이트·방은 그대로)
+   */
+  deployCheck({ site, booking, pages = 0, split = false, rows = 0, pc, pz, rc, rw }) {
     const now = Date.now();
-    if (this.paused()) throw this.pausedError();
-    const n = Number.isSafeInteger(pages) && pages > 0 ? Math.min(pages, 2000) : 0;
-    const wait = this.pagesWait(n, now);
-    if (wait) throw this.refuse({ reason: 'pages_api', message_ko: MSG.pages_api, retryAt: now + wait }, now);
-    const bk = booking && typeof booking === 'object' ? this.book({ site, booking, split }, now) : null;
+    const est = Number.isSafeInteger(rows) && rows > 0 ? Math.min(rows, 100000) : 0;
+    const got = Number.isSafeInteger(rw) && rw > 0 ? rw : 0;
+    const record = (extra = 0) => { if (pc || pz || rc || got || extra) this.siteUpdate({ id: '', pc, pz, rc, rw: got + extra }); };
+    const day = dayOf(now); const srw = { k: `srw:${day}:${typeof site === 'string' ? site.slice(0, 40) : ''}`, exp: (day + 1) * DAY_MS };
+    let n = 0; let bk = null;
+    try {
+      if (this.paused()) throw this.pausedError();
+      n = Number.isSafeInteger(pages) && pages > 0 ? Math.min(pages, 2000) : 0;
+      const wait = this.pagesWait(n, now);
+      if (wait) throw this.refuse({ reason: 'pages_api', message_ko: MSG.pages_api, retryAt: now + wait }, now);
+      if (est) {
+        if (this.count(srw.k) + est > this.cfg.siteRowsPerDay) throw this.limited(srw, now, 'site_rows', MSG.site_rows);
+        const d = this.dayData(day);
+        if (this.rowsFull({ rw: (d.rw || 0) + got + est })) throw this.refuse({ reason: 'rows', message_ko: MSG.rows, resetAt: srw.exp }, now);
+      }
+      bk = booking && typeof booking === 'object' ? this.book({ site, booking, split }, now) : null;
+    } catch (e) { record(); throw e; }
     if (n) this.pwin.push([now, n]);
+    if (est) this.sql.exec('INSERT INTO rl (k, n, exp) VALUES (?, ?, ?) ON CONFLICT (k) DO UPDATE SET n = n + excluded.n', srw.k, est, srw.exp);
+    record(est);
     return { ...this.usage(), paused: false, ...(bk?.live ? { live: bk.live } : {}) };
   }
   /** 상태 API: 오늘과 그날(date)의 남은 몫, 사이트 상태 */

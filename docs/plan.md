@@ -15,7 +15,7 @@
 | 엔진 위치 | **skills/lecpage/engine 하나**를 skill과 웹앱이 함께 씀 | `npx skills add`로 받은 skill이 자체 완결, 복사본 없음 |
 | 실시간 | **어댑터 5종**(브라우저 미리보기·Supabase·Sheets·Cloudflare·자체 서버) + 공통 HTTP 프로토콜 | 인원·인프라·인터넷 없는 교실까지 대응 |
 | 참가자 로그인 | **로그인 없음, 참여 토큰** | Supabase 익명 로그인은 IP당 시간당 30회라 한 학교(공인 IP 하나)에서 31번째부터 막힘 |
-| AI 연결 | 내 PC의 Claude Code·Codex(첫 추천) · 키 붙여넣기(Claude · OpenAI) · skill. Gemini는 만들기에서 뺌(2026-11-21) | 구독 계정 로그인을 앱이 빌려 쓰지 않음 |
+| AI 연결 | ChatGPT·Claude 구독 계정(lecpage 커넥트, 첫 추천) · 접힌 '다른 방법'(API 키(Claude · OpenAI) · Claude Code 터미널 · Codex · AI 에이전트(Skill)). Gemini는 만들기에서 뺌(2026-11-21) | 구독 로그인은 강사 PC의 lecpage 커넥트가 맡아 로그인 정보가 그 PC에만 있음 |
 | 웹앱 운영 | **로컬 우선 정적 PWA**, 로그인·운영자 DB 없음, Cloudflare Workers 정적 자산 + lecpage.com, GitHub Pages는 미러 | 운영비 0원(도메인 값만) |
 
 ## 3. 운영 방식 결정
@@ -23,12 +23,12 @@
 - 기록이 필요 없음 → 정적(서버 없음)
 - 모으기만, 40명 이하 → Google Sheets
 - 클릭만 하는 강사, 50명 이하(질문·도움 요청·진행 현황 포함) → Google Sheets
-- 실시간, 100명 이하 → Supabase 무료(강사 소유)
-- 100명 초과 → Cloudflare Workers + Durable Objects(강사 계정, Deploy 버튼)
+- 실시간, 80명 이하 → Supabase 무료(강사 소유)
+- 80명 초과 → Cloudflare Workers + Durable Objects(강사 계정, Deploy 버튼)
 - 운영자 공용 중계는 두지 않음(모두 강사 소유)
 - 가진 서버(AWS·학교·NAS) + 설정 가능 → 자체 Node 서버(Docker)
 - 인터넷 없음 → 강사 노트북 서버(LAN)
-올릴 곳(2026-11-11 재조사, `docs/research/hosting-2026-11.md`): 앱은 **Vercel**(토큰 하나로 앱에서 바로, 다시 올려도 같은 주소) → GitHub Pages → Cloudflare(ZIP 끌어 놓기) → Netlify, skill은 **Cloudflare Workers 정적 자산**(`wrangler`, 상업 이용 가능·요청 무제한) 먼저. 강사료를 받는 연수는 Vercel 무료를 빼고, 사이트 크기·파일 수·지난번에 올린 곳·연결해 둔 곳을 보고 순서를 바꿈(`decideHost`, `checkHost`). 운영자가 켜면 가입 없이 30일 동안 여는 '바로 공개'(`hosting/`)도 고를 수 있음. 그 밖: Firebase · AWS · 자체 서버 · ZIP/USB. 상세: `references/infra-decision.md`, `references/deploy/*.md`(15종).
+올릴 곳(2026-11-11 재조사, `docs/research/hosting-2026-11.md`): 앱은 지난번에 배포한 곳 → 바로 배포(켜져 있을 때) → 지금 이 기기에서 버튼 하나로 되는 곳(연결해 둔 곳, lecpage 커넥트가 켜져 있으면 **Cloudflare**, 꺼져 있으면 브라우저 로그인 한 번인 **Netlify**), skill은 **Cloudflare Workers 정적 자산**(`wrangler`, 상업 이용 가능·요청 무제한) 먼저. 강사료를 받는 연수는 Vercel 무료를 빼고, 사이트 크기·파일 수·지난번에 올린 곳·연결해 둔 곳을 보고 순서를 바꿈(`decideHost`, `checkHost`). 운영자가 켜면 가입 없이 여는 '바로 배포'(`hosting/`, 마지막 배포 뒤 60일 보관 — Pages 보기 기본, worker 보기는 30일)도 고를 수 있음. 그 밖: Firebase · AWS · 자체 서버 · ZIP/USB. 상세: `references/infra-decision.md`, `references/deploy/*.md`(15종).
 생성 사이트 공개 범위: 링크(기본, 검색 제외) · 공개 · 암호(AES-GCM 암호화, QR `#k=`로 자동 열기). 강사용 파일(운영안내.md)은 올리는 사이트에 넣지 않음.
 
 ## 4. 개인정보·보안
@@ -41,5 +41,5 @@
 
 ## 6. 남은 결정(운영자)
 1. ~~웹앱 주소~~ → 2026-11-09 결정: Cloudflare Workers 정적 자산 + lecpage.com, GitHub Pages 미러(`docs/operations.md`)
-2. Sign in with ChatGPT 대기 신청 여부
+2. ~~Sign in with ChatGPT 대기 신청 여부~~ → lecpage 커넥트의 ChatGPT 로그인(SIWC)으로 넣음(`skills/lecpage/scripts/studio-siwc.mjs`)
 3. ~~공용 실시간 중계 운영 여부~~ → 2026-11-09 결정: 운영하지 않음. 강사 소유 백엔드를 쉽게(`docs/research/2026-11-review.md`)

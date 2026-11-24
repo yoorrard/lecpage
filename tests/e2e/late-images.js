@@ -34,7 +34,10 @@ const gallery = (n) => Array.from({ length: n }, (_, i) => `<img src="material/p
 const pg = (n) => `material/p-${String(n).padStart(3, '0')}.webp`;
 // 실제 AI가 쓰는 모양(2026-11-24 실측: 쪽을 고르는 손잡이): 스크립트가 주소를 실행 중에 만들어 넣음. 1쪽은 한 장 HTML에 담긴 쪽이라 '못 담은 그림' 목록에 없음
 const dial = '<p><img id="dialImg" alt="고른 쪽" width="160" height="90"></p><script>(function(){var pad=function(n){return String(n).padStart(3,"0")};setTimeout(function(){var i=document.getElementById("dialImg");i.src="material/p-"+pad(1)+".webp"},0)})();</script>';
-const extras = (n) => `<section id="more" data-title="더 보기"><h2>더 보기</h2>${dial}<p><a id="open-last" href="${pg(n)}">마지막 쪽 크게 보기</a></p>`
+// 쪽을 미리 받아 두는 스크립트(2026-11-24 독립 점검): 그림 요소를 먼저 만들어 주소를 넣고 문서에는 나중에 붙임. 받기 전에 넣은 주소는 빈 그림 자리(1×1)였다가
+// 받은 뒤 바뀌어야 하는데, 문서에 없는 요소는 document.images에 없어 빈 그림인 채 붙었음. '/'로 시작하는 주소(/material/…)도 사이트 맨 위 기준으로 열려야 함
+const preload = '<p id="preBox"></p><p><img id="rootImg" alt="맨 위 기준 주소" width="160" height="90"></p><script>(function(){var pad=function(n){return String(n).padStart(3,"0")};var pre=[];for(var k=3;k<=4;k++){var im=new Image();im.alt="미리 받은 "+k+"쪽";im.width=160;im.src="material/p-"+pad(k)+".webp";pre.push(im)}window.lpPreAttach=function(){var b=document.getElementById("preBox");pre.forEach(function(im){b.appendChild(im)});return pre.length};document.getElementById("rootImg").src="/material/p-"+pad(2)+".webp"})();</script>';
+const extras = (n) => `<section id="more" data-title="더 보기"><h2>더 보기</h2>${dial}${preload}<p><a id="open-last" href="${pg(n)}">마지막 쪽 크게 보기</a></p>`
   + `<div id="bg" style="width:40px;height:40px;background:url(${pg(1)}) center/cover"></div><video id="vid" poster="${pg(2)}" width="40" height="30"></video></section>`;
 const answer = (n) => '```html\n<!doctype html>\n<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>쪽 많은 교재</title></head><body><main><section id="top" data-title="첫 화면"><h1>쪽 많은 교재</h1><p>교재 슬라이드로 봐요.</p></section>'
   + `<section id="deck" data-title="교재"><h2>교재</h2><div data-lp="deck"></div></section><section id="all" data-title="전체 쪽"><h2>전체 쪽</h2>${gallery(n)}</section>${extras(n)}</main></body></html>\n` + '```\n\n```json\n{"title":"쪽 많은 교재","sessions":[{"date":"2026-12-09","start":"14:00","end":"17:00"}]}\n```';
@@ -83,6 +86,15 @@ const answer = (n) => '```html\n<!doctype html>\n<html lang="ko"><head><meta cha
   // 스크립트가 만든 주소(1쪽: 한 장 HTML에 담긴 쪽)도 열림 — 실제 AI 사이트에서 "그림이 열리지 않아요(material/p-001.webp)"로 뜨던 것
   const dialW = await fr.locator('#dialImg').evaluate((i) => new Promise((r) => { const done = () => r({ w: i.naturalWidth, src: (i.currentSrc || i.src || '').slice(0, 5) }); if (i.complete && i.naturalWidth) return done(); i.addEventListener('load', done); setTimeout(done, 5000); }));
   ok('preview: an image whose address a site script builds at run time (img.src = "material/p-" + n) opens', dialW.w > 0 && dialW.src === 'blob:', JSON.stringify(dialW));
+  // 미리 만들어 둔 그림(문서 밖)을 받은 뒤에 붙여도 진짜 그림(1×1 빈 그림 자리가 아님), '/'로 시작하는 주소도 열림
+  const pre = await fr.locator('body').evaluate(async () => {
+    const n = window.lpPreAttach();
+    const imgs = [...document.querySelectorAll('#preBox img'), document.getElementById('rootImg')];
+    await Promise.all(imgs.map((i) => new Promise((r) => { if (i.complete && i.naturalWidth > 1) return r(); i.addEventListener('load', r); i.addEventListener('error', r); setTimeout(r, 4000); })));
+    return { n, w: imgs.map((i) => i.naturalWidth), src: imgs.map((i) => (i.currentSrc || i.src || '').slice(0, 5)) };
+  });
+  ok('preview: images created before the hand-over and attached later (preload array) show the real page, not the 1×1 placeholder', pre.n === 2 && pre.w.slice(0, 2).every((w) => w > 1) && pre.src.slice(0, 2).every((x) => x === 'blob:'), JSON.stringify(pre));
+  ok('preview: a root-absolute address a script sets (/material/p-002.webp) opens', pre.w[2] > 1 && pre.src[2] === 'blob:', JSON.stringify(pre));
   // 3 교재 슬라이드에서 마지막 쪽으로: 나중에 넣는 주소(img.src = 'material/p-024.webp')도 열림
   const last = await fr.locator('body').evaluate(async (body, n) => {
     const img = document.createElement('img'); img.alt = 'late'; img.width = 10; body.appendChild(img);

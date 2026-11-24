@@ -2,8 +2,8 @@
 # 합치기 전 검증을 한 번에. 지금 git 인덱스(스테이징한 상태)를 그대로 떠서 검사하고, 결과는 요약 줄만 찍습니다.
 # 사용: bash scripts/verify.sh [--e2e] [--hosting]     (npm run verify / npm run verify:full)
 #   기본: 엔진 테스트 · 예시 빌드 · 앱 빌드
-#   --e2e: 앱 미리보기(4175·4182)를 띄워 앱 흐름(flow·more·share-flow·hosts·studio2·studio3·doc-render·start-dict·instant·flow2·live-hosts). tests/e2e/ 는 작업 폴더의 것을 씁니다
-#   --hosting: 바로 공개 서버 테스트
+#   --e2e: 앱 미리보기(4175·4182)를 띄워 앱 흐름 21개(flow·more·share-flow·hosts·studio2·studio3·doc-render·start-dict·wipe·multi-material·live-setup·netlify-login·connect-ui·one-primary·late-images·save-open·instant·flow2·live-hosts·cf-connect·vc-connect). tests/e2e/ 는 작업 폴더의 것을 씁니다
+#   --hosting: 바로 배포 서버 테스트
 # 환경변수: VERIFY_DIR(검사용 복사본 위치) · OUT_DIR(로그·스크린샷, 기본 .out/verify)
 # 자세한 기록: .out/verify/log-*.txt, 스크린샷: .out/verify/shots/
 set -u

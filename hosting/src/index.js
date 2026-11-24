@@ -7,11 +7,13 @@
 import { config, expiryFrom, EXTRA_WORK_SHARE, SSE_STOP_PCT } from './config.js';
 import { HttpError, json, readJson, errorFrom, corsHeaders, preflight, withHeaders } from './http.js';
 import { ID_RE, SHA256_RE, DEPLOY_RE, newId, newKey, sha256Hex, bearer, secretMatches } from './ids.js';
-import { notFoundPage, gonePage, removedPage, methodNotAllowed } from './pages.js';
+import { notFoundPage, gonePage, removedPage, methodNotAllowed, noFilePage } from './pages.js';
 import { liveTarget, liveOriginOk, FILE_ALIAS, LIVE_PREFIX, LiveError } from './live/host.js';
 import { Tally, MinuteLimiter, appStatKey } from './tally.js';
 import { admin } from './admin.js';
-import { extOf } from './paths.js';
+import { extOf, MAX_JS_BYTES } from './paths.js';
+import { isRuntimeJs } from './runtime.js';
+import { RUNTIME_SEGMENTS, PAGES_RUNTIME } from './runtime-allow.js';
 import { siteUrlOf, siteOriginRe } from './pages-site.js';
 import { Site, BUNDLE_HEAD_MAX, BUNDLE_FILES } from './site.js';
 import { Gate } from './gate.js';
@@ -145,7 +147,7 @@ async function serveSite(request, env, ctx, url, cfg) {
   }
   let res = await siteStub(env, id).fetch(`http://site/file?p=${encodeURIComponent(path)}${v ? `&v=${encodeURIComponent(v)}` : ''}`, { method: request.method, headers });
   const proxy = res.headers.get('x-lp-proxy');
-  if (proxy) res = await fromPages(request, proxy, id, path);
+  if (proxy) res = await fromPages(request, proxy, id, path, res.headers.get('x-lp-js') || '');
   const lpState = res.headers.get('x-lp-state');
   if (lpState === 'gone' || lpState === 'removed') {
     if (goneMem.size > 5000) goneMem.clear();
@@ -164,15 +166,31 @@ async function serveSite(request, env, ctx, url, cfg) {
  * VIEW=pages 사이트를 이 호스트 주소(/s/<id>/…)로 열 때: Pages에서 가져와 내보냄. 학교망이 pages.dev를 막았을 때 쓰는 두 번째 주소.
  * Pages의 머리글(CSP 등 우리가 만든 _headers)을 그대로 쓰고, 이 호스트 주소로 넘기는 것만 고침.
  */
-async function fromPages(request, base, id, path) {
+/** 엔진 런타임으로 아는 .js 내용의 sha256: 지금 판의 런타임 파일(PAGES_RUNTIME)과 조각 하나짜리 파일(지금 판 + runtime-history의 예전 판). 이은 파일(live.js 등)은 가져와 확인한 뒤 runtimeSeen에 */
+const RUNTIME_KNOWN = new Set([...Object.keys(PAGES_RUNTIME || {}), ...(RUNTIME_SEGMENTS || []).map((s) => s[3])]);
+const runtimeSeen = new Set();
+async function fromPages(request, base, id, path, jsSha = '') {
+  const head = request.method === 'HEAD';
   const target = new URL(path || '', base);
-  if (!target.href.startsWith(base)) return notFoundPage(request.method === 'HEAD');
+  if (!target.href.startsWith(base)) return notFoundPage(head);
+  // .js(jsSha = 목록의 sha256): 이 주소는 모든 사이트가 같이 쓰는 출처라 엔진 런타임만 내보냄. 확인한 적 없는 내용이면 가져와 보고 아니면 없는 파일로(닫힌 쪽으로)
+  const check = !!jsSha && !RUNTIME_KNOWN.has(jsSha) && !runtimeSeen.has(jsSha);
   const h = new Headers();
-  for (const k of ['if-none-match', 'accept', 'accept-language', 'user-agent']) { const x = request.headers.get(k); if (x) h.set(k, x); }
+  for (const k of ['if-none-match', 'accept', 'accept-language', 'user-agent']) { const x = request.headers.get(k); if (x && !(check && k === 'if-none-match')) h.set(k, x); }
   let r;
-  try { r = await fetch(target.href, { method: request.method === 'HEAD' ? 'HEAD' : 'GET', headers: h, redirect: 'manual' }); }
+  try { r = await fetch(target.href, { method: head && !check ? 'HEAD' : 'GET', headers: h, redirect: 'manual' }); }
   catch { return new Response('사이트를 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.\n', { status: 502, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' } }); }
-  const out = new Response(r.body, r);
+  let body = r.body;
+  if (check) {
+    const len = Number(r.headers.get('content-length') || 0);
+    if (r.status !== 200 || len > MAX_JS_BYTES) { r.body?.cancel().catch(() => { }); return noFilePage(head); }
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    if (bytes.byteLength > MAX_JS_BYTES || !(await isRuntimeJs(bytes))) return noFilePage(head);
+    if ((await sha256Hex(bytes)) === jsSha) { if (runtimeSeen.size > 5000) runtimeSeen.clear(); runtimeSeen.add(jsSha); }
+    body = head ? null : bytes;
+  }
+  const out = new Response(body, r);
+  if (check) out.headers.delete('content-length');
   for (const k of ['access-control-allow-origin', 'set-cookie', 'report-to', 'nel', 'server-timing']) out.headers.delete(k);
   const loc = r.headers.get('location');
   if (loc) {
@@ -299,10 +317,11 @@ async function route(request, env, ctx, url, cfg, self) {
       // sitesPerDevice: 기기 하나가 하루에 만드는 새 사이트(다시 배포는 세지 않음). quota: 한 사람 몫을 다시 세게 한 번호(QUOTA_EPOCH) —
       // 앱이 적어 둔 '오늘 남은 몫'이 이 번호와 다를 때 만든 것이면 버리면 됨(운영자가 횟수를 초기화함)
       // maxFileBytes: 파일 하나(이보다 큰 교재 원본은 앱이 사이트에 넣지 않고 배포). maxMediaBytes(pages 보기): HTML·영상·소리 합계
+      // maxKeptFiles(pages 보기): HTML·영상·소리·.js 파일 수 합계(넘으면 too_many_files)
       // bundle: 작은 파일(itemBytes 이하)을 요청 하나에 여럿(합계 bytes·files개까지) 묶어 받음(PUT /api/sites/:id/blobs). 없으면 파일마다 올림
       limits: {
         maxBytes: cfg.maxBytes, maxFileBytes: cfg.maxFileBytes, maxFiles: cfg.maxFiles, days: cfg.days, sitesPerDevice: cfg.sitesPerDevice,
-        ...(cfg.view === 'pages' ? { maxMediaBytes: cfg.maxMediaBytes } : {}),
+        ...(cfg.view === 'pages' ? { maxMediaBytes: cfg.maxMediaBytes, maxKeptFiles: cfg.maxKeptFiles } : {}),
         ...(cfg.bundleBytes ? { bundle: { bytes: cfg.bundleBytes, itemBytes: Math.min(cfg.bundleItemBytes, cfg.bundleBytes, cfg.maxFileBytes), files: BUNDLE_FILES } } : {}),
       },
       quota: cfg.quotaEpoch,

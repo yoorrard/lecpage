@@ -13,6 +13,13 @@ export const DEFAULTS = {
   // 실제 사이트는 파일 573개 중 537개가 글꼴 조각(작은 woff2)이라 파일마다 받으면 새 배포 한 번에 요청 568번 → 묶으면 열 번 안쪽(2026-11-23 운영 실측). 하루 요청 몫(10만)을 참여 기능과 나눠 쓰므로 줄임
   BUNDLE_BYTES: 8 * MB,
   BUNDLE_ITEM_BYTES: 512 * 1024,
+  // (pages 보기) 파일마다 이 객체 저장소에 줄을 쓰는 파일(HTML·영상·소리와 .js — .js는 사이트 스크립트인지 적는 줄)의 수. 배포 목록 하나가 쓰는 행 수의 상한이 됨.
+  // AI가 만든 사이트는 HTML 수십 쪽 + 보조 쪽(강사·발표·포스터·접속 확인·개인정보) + 런타임 .js 열몇 개라 넉넉히. 쪽 그림·글꼴 조각·CSS는 Pages에 두어 들지 않음
+  MAX_KEPT_FILES: 500,
+  // 사이트 하나가 하루(UTC)에 배포 목록으로 쓸 수 있는 행(어림, site.js rowsEstimate). 넘으면 다음 날까지 목록을 받지 않음(rate_limited · reason 'site_rows').
+  // HTML 60쪽 사이트를 통째로 바꿔 올려도 한 번에 약 150행이라 하루 100번 넘게, 500개 상한까지 꽉 찬 사이트도 하루 18번쯤 다시 배포할 수 있음.
+  // 기기 하나의 하루 새 사이트 3개를 다 써도 6만 행으로 하루 무료 행(10만)의 85% 선(ROWS_STOP_SHARE) 아래
+  SITE_ROWS_PER_DAY: 20000,
   SITE_DAYS: 30, // 보관 기간(마지막으로 배포한 날부터)
   SITES_PER_HOUR: 6, // 같은 인터넷 주소(IP)에서 새 사이트(앱이 기기 표를 보내지 않을 때)
   SITES_PER_DAY: 20,
@@ -125,6 +132,8 @@ export function config(env = {}) {
     maxMediaBytes: num(env.MAX_MEDIA_BYTES, DEFAULTS.MAX_MEDIA_BYTES),
     bundleBytes: num(env.BUNDLE_BYTES, DEFAULTS.BUNDLE_BYTES, { min: 0 }),
     bundleItemBytes: num(env.BUNDLE_ITEM_BYTES, DEFAULTS.BUNDLE_ITEM_BYTES),
+    maxKeptFiles: num(env.MAX_KEPT_FILES, DEFAULTS.MAX_KEPT_FILES),
+    siteRowsPerDay: num(env.SITE_ROWS_PER_DAY, DEFAULTS.SITE_ROWS_PER_DAY),
     days: num(env.SITE_DAYS, view === 'pages' ? PAGES_SITE_DAYS : DEFAULTS.SITE_DAYS, { int: false, min: 1e-9 }),
     sitesPerHour: num(env.SITES_PER_HOUR, DEFAULTS.SITES_PER_HOUR),
     sitesPerDay: num(env.SITES_PER_DAY, DEFAULTS.SITES_PER_DAY),

@@ -5,7 +5,7 @@
     { "name": "qrcode-generator", "version": "1.4.4", "license": "MIT", "path": "engine/runtime/vendor/qrcode.js", "source": "https://github.com/kazuhikoarase/qrcode-generator (머리말 아래 그대로, 만든 사이트의 assets/qr.js)", "sha256": "44377a74aa7168f39dad0c4856151a780db12582cbcc85c3b86db1b64c70b631" }
   ],
   "tools": [
-    { "name": "wrangler", "version": "4.151.3", "where": "backends/cloudflare/package.json(publish가 이 판으로 부름)" },
+    { "name": "wrangler", "version": "4.158.0", "where": "backends/cloudflare/package.json(publish가 이 판으로 부름)" },
     { "name": "vercel", "version": "65.8.0", "where": "engine/src/decide/infra.js · references/deploy/vercel.md" },
     { "name": "netlify-cli", "version": "27.16.1", "where": "engine/src/decide/infra.js · references/deploy/netlify.md" },
     { "name": "firebase-tools", "version": "15.34.2", "where": "references/deploy/firebase.md" },
