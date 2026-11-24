@@ -4,6 +4,7 @@
 //   readMeta(json, { prev }) → { meta, errors, warnings, old } · keepTeacherValues · themeFromCss · issuesForAi
 import { todayKst } from '../util.js';
 import { tangledTitle } from '@engine/src/kit/index.js';
+import { pagesBySets, slideSetsOf } from './slide-sets.js';
 export { assemble, previewHtml, inspect, issuesForAi, inspectRenderedScript, readMeta, keepTeacherValues, themeFromCss, TEACHER_KEYS, siteFileOk } from '@engine/src/kit/index.js';
 
 let rt = null;
@@ -12,9 +13,11 @@ export function kitRuntime() {
   if (!rt) rt = import('../runtime-files.js').then((m) => m.runtime).catch((e) => { rt = null; throw e; });
   return rt;
 }
-/** 교재 쪽 제목(교재 슬라이드 검색용): project.material.pages → [{ page, title, text }] (첫 교재 파일 기준) */
+/** 교재 쪽 제목(교재 슬라이드의 쪽 이름·검색용): project.material.pages → [{ page: 쪽 그림 번호, title, text }].
+ * 쪽 그림 번호는 교재 묶음을 따름(slide-sets.js pagesBySets). 묶음이 없는 예전 연수만 첫 교재 파일의 쪽 번호 그대로 */
 export function materialPages(project) {
   const m = project?.material; if (!m?.pages?.length) return [];
+  const bySets = pagesBySets(m, slideSetsOf(project)); if (bySets) return bySets;
   const first = (m.files || []).find((f) => !f.renderOf)?.id;
   return m.pages.filter((p) => !p.hidden && (!first || p.file === first)).slice(0, 400)
     .map((p) => ({ page: p.page, title: String(p.title || '').slice(0, 120), text: (p.paragraphs || []).map((x) => x.text).join(' ').slice(0, 400) }));

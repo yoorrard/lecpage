@@ -177,3 +177,32 @@ test('prepare: 교재마다 그려 보낸 쪽 그림을 묶음마다 그 교재�
   assert.deepEqual(e.j.given.sets.map((x) => x.owner), ['workshop.pdf']);
   assert.deepEqual(e.j.files.map((f) => [f.name, f.images]), [['workshop.pdf', 13], ['ko-cid.pdf', 0]]);
 });
+
+// 교재 쪽 이름(교재 슬라이드의 제목·검색): 쪽 그림 번호는 묶음을 따르는데, 제목은 '먼저 읽기가 끝난 교재'의 쪽 번호 그대로 붙여
+// 큰 PDF 뒤에 넣은 PPT가 먼저 읽히면 PPT 슬라이드의 제목이 PDF 쪽(1~13쪽)에 붙었음(실제 AI 300쪽 PDF + PPT 사이트의 품질 평가에서 찾음)
+test('쪽 이름은 묶음 번호에 맞춤: 먼저 읽힌 교재가 뒤 묶음이어도 그 교재의 쪽에만, 맞출 수 없는 교재는 비움', () => {
+  const pg = (file, page, title, more = {}) => ({ file, page, title, paragraphs: [{ text: title + ' 본문' }], ...more });
+  const material = {
+    files: [{ id: 'deck2', name: 'workshop.pptx', unit: 'slide' }, { id: 'deck1', name: 'big.pdf', unit: 'page' }, { id: 'doc1', name: 'guide.docx', unit: 'section' }],
+    pages: [pg('deck2', 1, '표지'), pg('deck2', 2, '강사 소개'), pg('deck2', 3, '차례'), pg('deck1', 1, 'PDF 1쪽'), pg('deck1', 2, 'PDF 2쪽'), pg('doc1', 1, '운영 안내'), pg('doc1', 2, '준비물')],
+  };
+  const sets = [{ name: 'big.pdf', first: 1, count: 2 }, { name: 'workshop.pptx', first: 3, count: 3 }, { name: 'guide.docx', first: 6, count: 2 }];
+  const rows = SS.pagesBySets(material, sets);
+  assert.deepEqual(rows.map((r) => [r.page, r.title]), [[1, 'PDF 1쪽'], [2, 'PDF 2쪽'], [3, '표지'], [4, '강사 소개'], [5, '차례']], '묶음 번호대로(문서형 교재는 부분과 쪽이 달라 비움)');
+  assert.equal(rows[2].text, '표지 본문');
+  // 교재 하나(예전과 같은 결과)
+  assert.deepEqual(SS.pagesBySets({ files: [material.files[0]], pages: material.pages.slice(0, 3) }, [{ name: 'workshop.pptx', first: 1, count: 3 }]).map((r) => r.page), [1, 2, 3]);
+  // 숨긴 슬라이드: 그림을 보이는 쪽만 그렸으면 보이는 쪽 차례로, 숨긴 쪽까지 그렸으면 쪽 차례 그대로(숨긴 쪽 이름은 뺌)
+  const hid = { files: [material.files[0]], pages: [pg('deck2', 1, '가'), pg('deck2', 2, '나(숨김)', { hidden: true }), pg('deck2', 3, '다')] };
+  assert.deepEqual(SS.pagesBySets(hid, [{ name: 'workshop.pptx', first: 1, count: 2 }]).map((r) => [r.page, r.title]), [[1, '가'], [2, '다']]);
+  assert.deepEqual(SS.pagesBySets(hid, [{ name: 'workshop.pptx', first: 1, count: 3 }]).map((r) => [r.page, r.title]), [[1, '가'], [3, '다']]);
+  // 교재가 그림보다 길면(쪽 그림 한도·그리다 멈춤) 앞에서부터 그린 만큼만
+  const long = { files: [{ id: 'deck1', name: 'big.pdf', unit: 'page' }], pages: [1, 2, 3, 4, 5].map((n) => pg('deck1', n, 'PDF ' + n + '쪽')) };
+  assert.deepEqual(SS.pagesBySets(long, [{ name: 'big.pdf', first: 1, count: 3 }]).map((r) => [r.page, r.title]), [[1, 'PDF 1쪽'], [2, 'PDF 2쪽'], [3, 'PDF 3쪽']]);
+  // 그림이 교재 쪽보다 많거나 묶음의 교재를 찾지 못하면 비움, 같은 이름의 PDF 짝(이 PC에서 만든 PDF)은 그 교재로
+  assert.deepEqual(SS.pagesBySets(hid, [{ name: 'workshop.pptx', first: 1, count: 7 }]), []);
+  assert.deepEqual(SS.pagesBySets(hid, [{ name: 'other.pdf', first: 1, count: 2 }]), []);
+  assert.deepEqual(SS.pagesBySets(hid, [{ name: 'workshop.pdf', first: 1, count: 2 }]).map((r) => r.page), [1, 2]);
+  // 묶음이 없으면(예전 연수) null → 부른 쪽이 예전 규칙을 씀
+  assert.equal(SS.pagesBySets(material, []), null);
+});

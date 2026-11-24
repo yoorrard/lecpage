@@ -42,7 +42,7 @@ async function making(b) {
     const shown = (await s.locator('.settings').innerText()).replace(/\s+/g, ' ');
     L.ok(`wipe ${mode}: 설정 화면이 바로 지운 모습(연결됨 없음·'방금 모두 지웠어요')`, !/연결됨/.test(shown) && /API 키 연결 안 됨/.test(shown) && /방금 모두 지웠어요/.test(shown), (shown.match(/AI .{0,60}/) || [''])[0]);
     L.ok(`wipe ${mode}: 지운 뒤 AI를 더 부르지 않고 도는 작업이 없음`, posts.n === at && !a.busy, `${at} → ${posts.n}`);
-    L.ok(`wipe ${mode}: 이 브라우저에 화면 밝기·통계 끄기만 남음`, a.ls.every((k) => ['lecpage:theme', 'lecpage:stats-off'].includes(k)) && a.ss.length === 0, [...a.ls, ...a.ss].join(','));
+    L.ok(`wipe ${mode}: 이 브라우저에 화면 밝기·통계 끄기만 남음`, a.ls.every((k) => ['lecpage:theme', 'lecpage:stats-off', 'lecpage:stats-open-day'].includes(k)) /* stats-open-day: 익명 합계를 켠 판(운영)에서 앱을 다시 그리며 오늘 날짜만 새로 적음(지운 뒤 생긴 것, 개인 정보 아님) */ && a.ss.length === 0, [...a.ls, ...a.ss].join(','));
     if (mode === 'other') {
       const t = await dump(p).catch(() => null);
       L.ok('wipe other: 만들던 탭도 멈추고 처음 화면으로 돌아감(탭 저장소도 비움)', !!t && !t.busy && t.ss.length === 0 && /#\/?$/.test(new URL(p.url()).hash || '#/'), `${p.url()} ${JSON.stringify(t)}`);

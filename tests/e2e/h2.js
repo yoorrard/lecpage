@@ -61,7 +61,7 @@ async function mockAll(ctx, state = {}) {
       if (/^\/api\/v1\/sites\/site1\/deploys\/d\d$/.test(u.pathname)) return json({ state: 'ready', ssl_url: 'https://maum-nf.netlify.app' });
       return json({}, 404);
     }
-    if (u.host !== 'api.vercel.com') return r.abort();
+    if (u.host !== 'api.vercel.com') return process.env.E2E_REMOTE === '1' ? r.continue() : r.abort(); // E2E_REMOTE=1: 운영 주소로 돌릴 때 앱 파일·CDN은 그대로 받음
     if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
     state.calls.push(`${m} ${u.pathname}`);
     const authed = !state.revoked && req.headers().authorization === 'Bearer vcp_FAKE_TOKEN_1234567890';

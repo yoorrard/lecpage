@@ -41,6 +41,33 @@ export function setFor(sets, name) {
   const same = (sets || []).filter((s) => stemOf(s.name) === stemOf(name));
   return same.length === 1 ? same[0] : null;
 }
+/**
+ * 교재에서 뽑은 쪽(material.pages: { file, page, title, paragraphs, hidden })을 쪽 그림 번호에 맞춤 → [{ page: 그림 번호, title, text }].
+ * 쪽 그림 번호는 묶음(sets)을 따르므로 묶음마다 그 교재의 쪽을 차례대로 그 번호에 놓음. 예전에는 '먼저 읽기가 끝난 교재'의 쪽 번호를 그대로 써서,
+ * 큰 PDF 뒤에 넣은 PPT가 먼저 읽히면 PPT 슬라이드의 제목이 PDF 쪽(1~13쪽)에 붙었음(교재 슬라이드의 쪽 이름·검색이 다른 교재의 것).
+ * 쪽마다 맞출 수 없는 교재는 비움(틀린 이름을 붙이지 않게): 워드·한글처럼 '부분'으로 읽은 것, 그림이 교재 쪽보다 많은 것, 묶음의 교재를 찾지 못한 것.
+ * 묶음이 없으면(예전 연수) null — 부른 쪽이 예전 규칙(첫 교재)을 씀
+ */
+export function pagesBySets(material, sets) {
+  const list = normSets(sets); if (!list.length) return null;
+  const files = (material?.files || []).filter((f) => f && !f.renderOf);
+  const text = (p) => (p.paragraphs || []).map((x) => x.text).join(' ').slice(0, 400);
+  const out = [];
+  for (const s of list) {
+    const same = files.filter((f) => stemOf(f.name) === stemOf(s.name));
+    const f = files.find((x) => x.name === s.name) || (same.length === 1 ? same[0] : null);
+    if (!f || f.unit === 'section') continue;
+    const all = (material.pages || []).filter((p) => p.file === f.id).sort((a, b) => a.page - b.page);
+    const vis = all.filter((p) => !p.hidden);
+    // 그림을 보이는 쪽만 그렸으면 보이는 쪽 차례로, 숨긴 쪽까지 그렸으면 쪽 차례 그대로(숨긴 쪽의 이름은 적지 않음).
+    // 교재가 더 길면(쪽 그림 한도·그리다 멈춤) 앞에서부터 그린 만큼만 — 숨긴 쪽이 섞여 어느 쪽인지 알 수 없으면 비움
+    const rows = vis.length === s.count ? vis.map((p, i) => [p, i])
+      : all.length === s.count ? all.map((p, i) => [p, i]).filter(([p]) => !p.hidden)
+        : vis.length === all.length && all.length > s.count ? all.slice(0, s.count).map((p, i) => [p, i]) : [];
+    for (const [p, i] of rows) out.push({ page: s.first + i, title: String(p.title || '').slice(0, 120), text: text(p) });
+  }
+  return out.slice(0, MAX_SLIDES);
+}
 /** 'material/p-014.webp'·'assets/slides/slide-014.webp' → 14 (아니면 0) */
 export const numOf = (path) => +(/(?:^|\/)(?:p|slide)-(\d{3,4})\.(?:webp|png|jpe?g)$/i.exec(String(path || '')) || [])[1] || 0;
 
