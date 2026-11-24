@@ -446,8 +446,8 @@ test('서버: 긴 대기는 전과 같다 — 청한 만큼만 붙잡고 바뀌�
 });
 
 // ── 강의 당일 점검에서 고친 것(2026-11-24) ─────────────────────────────
-test('긴 대기: 강사가 바꾼 것을 받은 답 뒤에는 쉬는 틈을 다 기다리지 않고 1.5초쯤 뒤에 다시 붙잡는다(값을 치른 것 1분에 4번까지). 참가자 글만 온 답·조용한 때는 평소 쉬는 틈', { timeout: 150000 }, async () => {
-  // 투표 열기 → 결과 공개 → 닫기, 쪽 넘기기처럼 강사의 변화가 이어질 때: 전에는 변화 하나를 받은 뒤 쉬는 틈(6~8초) 동안 다음 변화가 보이지 않았음
+test('긴 대기: 바뀐 것을 받은 답 뒤에는 쉬는 틈을 다 기다리지 않고 1.5초쯤 뒤에 다시 붙잡는다(값을 치른 것 1분에 4번까지, 참가자 글만 온 답은 그 가운데 2번). 조용한 때는 평소 쉬는 틈', { timeout: 150000 }, async () => {
+  // 투표 열기 → 응답 → 결과 공개 → 닫기, 쪽 넘기기처럼 변화가 이어질 때: 전에는 변화 하나를 받은 뒤 쉬는 틈(6~8초) 동안 다음 변화가 보이지 않았음
   const REST = 5000, NORMAL = REST * 0.85 - 40;
   const room = fakeRoom();
   const { c } = poller(room, { pollMs: REST, waitS: 5 });
@@ -462,19 +462,21 @@ test('긴 대기: 강사가 바꾼 것을 받은 답 뒤에는 쉬는 틈을 다
     return room.reals()[n].at - room.reals()[n - 1].doneAt;
   };
   const quick = (g) => g >= 1100 && g <= 2200;
-  // ① 참가자 글만 온 답 뒤에는 평소 쉬는 틈(방이 떠들썩해도 요청이 늘지 않음)
+  // ① 평소에 붙잡힌 긴 대기가 참가자 글로 답함: 1.5초쯤 뒤에 다시 붙잡음
   const g0 = await gapAfter('push');
-  assert.ok(g0 >= NORMAL, `참가자 글 뒤: 평소 쉬는 틈(${g0}ms)`);
-  // ② 띄엄띄엄 넘기는 쪽(다시 붙잡은 뒤 쉬는 틈보다 오래 지나 바뀜): 늘 1.5초 뒤에 다시 붙잡고, 몫을 쓰지 않음(어차피 보냈을 요청)
+  assert.ok(quick(g0), `참가자 글 뒤에도 곧 다시(${g0}ms)`);
+  // ② 띄엄띄엄 오는 변화(다시 붙잡은 뒤 쉬는 틈보다 오래 지나 바뀜 — 15초마다 넘기는 쪽): 늘 1.5초 뒤에 다시 붙잡고, 몫을 쓰지 않음(어차피 보냈을 요청)
   const slow = [];
   for (let i = 0; i < 5; i++) slow.push(await gapAfter('bump', 3800)); // eslint-disable-line no-await-in-loop
-  assert.ok(slow.every(quick), `띄엄띄엄 오는 강사의 변화: 다섯 번 모두 1.5초쯤 뒤에 다시(${slow})`);
-  // ③ 몰아서 오는 변화(다시 붙잡자마자 또 바뀜 = 빠르게 다시 붙잡은 요청이 곧바로 답함 = 요청을 하나 더 씀): 그런 요청이 네 번이면 평소 쉬는 틈으로.
-  //    ②의 마지막에 다시 붙잡은 요청부터 세므로 여기서는 세 번까지 빠르고(네 번째 요청이 답한 뒤부터) 그 뒤는 평소대로
-  const fast = [];
-  for (let i = 0; i < 6; i++) fast.push(await gapAfter('bump')); // eslint-disable-line no-await-in-loop
-  assert.ok(fast.slice(0, 3).every(quick), `몰아서 오는 변화: 처음에는 1.5초쯤 뒤에(${fast})`);
-  assert.ok(fast.slice(3).every((g) => g >= NORMAL), `값을 치른 것이 1분에 네 번이면 평소 쉬는 틈(${fast})`);
+  assert.ok(slow.every(quick), `띄엄띄엄 오는 변화: 다섯 번 모두 1.5초쯤 뒤에 다시(${slow})`);
+  // ③ 몰아서 오는 변화(다시 붙잡자마자 또 바뀜 = 빠르게 다시 붙잡은 요청이 쉬는 틈 안에 답함 = 요청을 하나 더 씀): 그런 요청이 1분에 네 번이면 평소 쉬는 틈.
+  //    참가자 글만 온 답은 그 가운데 두 번까지만 써서, 응답이 몰리는 동안에도 강사의 다음 일(결과 공개·닫기)에 쓸 몫이 남음
+  const p1 = await gapAfter('push'), p2 = await gapAfter('push'); // 값을 치른 것 1 → 빠르게, 2 → 참가자 글의 몫이 다함
+  assert.ok(quick(p1), `몰아서 오는 참가자 글: 처음에는 곧 다시(${p1}ms)`);
+  assert.ok(p2 >= NORMAL, `참가자 글만으로는 두 번까지: 그 뒤는 평소 쉬는 틈(${p2}ms)`);
+  const b1 = await gapAfter('bump'), b2 = await gapAfter('bump'), b3 = await gapAfter('bump'), b4 = await gapAfter('bump');
+  assert.ok(quick(b1) && quick(b2), `강사의 변화는 남은 몫으로 곧 다시(${[b1, b2]})`);
+  assert.ok(b3 >= NORMAL && b4 >= NORMAL, `값을 치른 것이 1분에 네 번이면 강사의 변화 뒤에도 평소 쉬는 틈(${[b3, b4]})`);
   // ④ 조용한 때(끝까지 붙잡았다 빈 답): 평소 쉬는 틈 그대로
   const n0 = room.reals().length;
   assert.ok(await until(() => { const r = room.reals(); return r.length >= n0 + 2 && r[n0].done; }, 30000));

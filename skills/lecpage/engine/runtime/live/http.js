@@ -16,11 +16,11 @@
  * server's hello says caps:['sync'] (HTTP otherwise and on any doubt), and a hidden participant tab (config.restHidden,
  * set by the participant page only) polls once in 5 minutes (at once when shown again). Polls themselves are unchanged
  * (wait 20 s). The clock is never taken from an answer the server held: a held answer may carry the time the wait began.
- * After a long poll that brought a host state change (slide, poll opened/revealed/closed, timer, notice) the next one starts
- * after ~1.5 s instead of the full rest, so the host's next step (reveal after open, the next slide) no longer waits out the
- * 6–8 s rest. Only quick re-polls that cost a request count (they answered before the skipped rest was over): after 4 of
- * those in 60 s the normal rest is back. Never while the server asks for a longer gap; answers that carry only
- * participants' posts, quiet periods and interval polling are unchanged.
+ * After a long poll that brought changes the next one starts after ~1.5 s instead of the full rest, so what follows
+ * (answers after a poll opens, the reveal, the next slide) no longer waits out the 6–8 s rest. Only quick re-polls that
+ * cost a request count (they answered before the skipped rest was over): after 4 of those in 60 s the normal rest is
+ * back, and answers that carry only participants' posts may use 2 of the 4 (the rest is kept for the host's next step).
+ * Never while the server asks for a longer gap; empty answers (quiet periods) and interval polling are unchanged.
  * A write that fails with a network error (or gets no answer for 3 s) while a realtime transport is thought to be open
  * triggers one liveness check (a WebSocket ping, or GET state on SSE; 4 s): a silently dead network is noticed in seconds
  * instead of after the 60 s heartbeat silence. Nothing extra is sent while writes succeed.
@@ -301,14 +301,15 @@
     }
     function stopPolling() { clear('poll'); clear('upgrade'); var c = lpCtl; lpCtl = null; if (c) { try { c.abort(); } catch (e) { /* ignore */ } } }
     function schedulePoll(ms) { clear('poll'); every = ms; timers.poll = setTimeout(pollOnce, ms); }
-    // 강사가 바꾼 것을 받은 뒤의 빠른 다시 묻기. 값을 치른 것만 셈: 건너뛴 쉬는 틈이 끝나기 전에 답이 온 것(평소라면 한 번에 받았을 것을
+    // 바뀐 것을 받은 뒤의 빠른 다시 묻기. 값을 치른 것만 셈: 건너뛴 쉬는 틈이 끝나기 전에 답이 온 것(평소라면 한 번에 받았을 것을
     // 두 번에 받음 = 요청 하나 더). 그런 것이 지난 60초에 QUICK_MAX번이면 평소 쉬는 틈으로. 틈보다 오래 붙잡힌 것은 어차피 보냈을 요청이라 세지 않음
-    // (15초마다 쪽을 넘기는 강의가 몫을 다 써 버려 정작 투표 때 못 쓰지 않게)
-    var QUICK_MS = 1500, QUICK_MAX = 4, quickAt = [], quickFrom = 0, quickRest = 0;
-    function quickLeft() {
+    // (15초마다 쪽을 넘기는 강의가 몫을 다 써 버려 정작 투표 때 못 쓰지 않게).
+    // 참가자들의 글·응답만 온 답은 몫의 절반(QUICK_OTHER)까지만 씀: 응답이 몰리는 투표 중에도 강사의 다음 일(결과 공개·닫기)에 쓸 몫이 남게
+    var QUICK_MS = 1500, QUICK_MAX = 4, QUICK_OTHER = 2, quickAt = [], quickFrom = 0, quickRest = 0;
+    function quickLeft(max) {
       var now = Date.now();
       quickAt = quickAt.filter(function (t) { return now - t < 60000; });
-      return quickAt.length < QUICK_MAX;
+      return quickAt.length < max;
     }
     /** 긴 대기 한 번: 바뀐 것이 있으면 바로, 없으면 WAIT초 뒤에 답이 옴. 결과는 동기화 차례를 붙잡지 않게 'snapshot' 사건으로 넘김 */
     function longPoll() {
@@ -353,11 +354,11 @@
         }
         // 긴 대기는 쉬는 틈만(바뀐 것이 오면 그 틈 동안 모아 다음 대기에서 받음). 간격 묻기는 바뀐 것 없이 이어지면 늘림
         var ms = useLong && !pollErr && longOk !== false ? Math.max(pollMs, hintMs || 0) : netErr ? Math.min(30000, 4000 * netErr) : U.pollDelay(pollMs, { err: pollErr, empty: emptyPolls, hint: hintMs, admin: !!ctx.adminKey() });
-        // 강사가 바꾼 것(쪽·투표 열기/공개/닫기·타이머·공지)을 실어 온 긴 대기 뒤에는 곧 또 바뀔 때가 많음: 쉬는 틈을 다 기다리면
-        // 다음 변화가 그만큼(6~8초) 늦게 보임 → 그런 답 뒤에는 QUICK_MS 뒤에 바로 다시 붙잡음. 값을 치른 것이 1분에 QUICK_MAX번이면 평소 쉬는 틈
-        // (위 quickLeft), 서버가 간격을 늘려 달라고 한 날(X-Lec-Poll-Ms가 평소 틈보다 김)에는 하지 않음.
-        // 참가자들의 글·응답만 온 답, 조용한 때, 간격 묻기, 오류 뒤는 그대로(방이 떠들썩해도 요청이 늘지 않음)
-        if (useLong && r && !r.error && r.state && longOk !== false && (hintMs || 0) <= pollMs && quickLeft()) { quickFrom = Date.now(); quickRest = ms; ms = QUICK_MS; }
+        // 바뀐 것을 실어 온 긴 대기 뒤에는 곧 또 바뀔 때가 많음(투표 열기 → 응답 → 결과 공개 → 닫기, 강사가 쪽을 넘김): 쉬는 틈을 다 기다리면
+        // 다음 변화가 그만큼(6~8초) 늦게 보임 → 그런 답 뒤에는 QUICK_MS 뒤에 바로 다시 붙잡음. 값을 치른 것이 1분에 QUICK_MAX번
+        // (참가자 글·응답만 온 답은 QUICK_OTHER번)이면 평소 쉬는 틈(위 quickLeft), 서버가 간격을 늘려 달라고 한 날(X-Lec-Poll-Ms가 평소 틈보다 김)에는 하지 않음.
+        // 조용한 때(빈 답 뒤)·간격 묻기·오류 뒤는 그대로
+        if (useLong && r && !r.error && r.changes && longOk !== false && (hintMs || 0) <= pollMs && quickLeft(r.state ? QUICK_MAX : QUICK_OTHER)) { quickFrom = Date.now(); quickRest = ms; ms = QUICK_MS; }
         // 서버가 쉬라고 한 시간(Retry-After, 하루 한도·방 붐빔)은 지킴(최대 10분)
         var ra = r && r.error && +r.error.retryAfter;
         if (ra > 0) ms = Math.max(ms, Math.min(ra * 1000, 600000));

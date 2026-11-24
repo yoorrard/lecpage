@@ -44,10 +44,11 @@ async function open(ctx, time) {
 const vis = (page, sel) => page.evaluate((s) => { const n = document.querySelector(s); return !!n && !n.hidden && !!n.offsetParent; }, sel);
 /** 떠 있는 부품(position: fixed — offsetParent가 없음)이 보이는지 */
 const shown = (page, sel) => page.evaluate((s) => { const n = document.querySelector(s); if (!n || n.hidden) return false; const c = getComputedStyle(n), r = n.getBoundingClientRect(); return c.display !== 'none' && c.visibility !== 'hidden' && r.width > 0 && r.height > 0; }, sel);
-/** 입실 창에 이름을 적고 동의한 뒤 누름 */
+/** 입실 창에 이름·소속(직무연수라 꼭 적음)을 적고 동의한 뒤 누름 */
 async function fillJoin(p, name) {
   const dlg = p.locator('[data-join-dialog][open]'); await dlg.waitFor();
-  await dlg.locator('input[name=name]').fill(name); await dlg.locator('input[name=consent]').check(); await dlg.locator('[data-join-go]').click();
+  await dlg.locator('input[name=name]').fill(name); await dlg.locator('input[name=school]').fill('새봄중학교');
+  await dlg.locator('input[name=consent]').check(); await dlg.locator('[data-join-go]').click();
   return dlg;
 }
 
@@ -69,11 +70,12 @@ test('열어 둔 화면도 시각이 지나면 단계가 바뀜(시작 전 → �
     assert.equal(await shown(p, '[data-dock]'), true, '도크도 그대로');
     assert.equal(await shown(p, '[data-dock-attend]'), true, '아직 입실하지 않았으면 도크의 [출석]도');
     assert.equal(await shown(p, '[data-phase-bar]'), false, "'종료' 줄은 아직");
-    // 18:59: 끝 시각 + 1시간 59분 — 아직 그대로
-    await p.clock.fastForward('01:58:00'); await p.clock.runFor(31000);
+    // 18:57: 끝 시각 + 1시간 57분 — 아직 그대로(앞에서 흘려보낸 31초들을 더해 17:02 → 18:57)
+    await p.clock.fastForward('01:55:00'); await p.clock.runFor(31000);
     assert.equal(await vis(p, '[data-attend="out"]'), true);
-    // 19:01: 끝 시각 + 2시간 — 출석 단추·도크가 사라지고 까닭 한 줄과 '종료' 줄
-    await p.clock.fastForward('02:00'); await p.clock.runFor(31000);
+    assert.equal(await p.getAttribute('html', 'data-lp-closed'), null);
+    // 19:01: 끝 시각 + 2시간을 넘김 — 출석 단추·도크가 사라지고 까닭 한 줄과 '종료' 줄
+    await p.clock.fastForward('03:00'); await p.clock.runFor(31000);
     assert.equal(await p.getAttribute('html', 'data-lp-closed'), '');
     assert.equal(await vis(p, '[data-attend="in"]'), false);
     assert.equal(await vis(p, '[data-attend="out"]'), false);
@@ -96,7 +98,7 @@ test('끝 시각을 넘겨 진행하는 강의(16:59:40 → 17:00:20): 공지·�
   const ctx = await browser.newContext({ viewport: { width: 320, height: 568 }, locale: 'ko-KR', timezoneId: 'Asia/Seoul' });
   const A = api(srv.url, 'ATTPHASE');
   try {
-    const p = await open(ctx, '16:59'); await p.clock.fastForward('00:40'); // 16:59:40
+    const p = await open(ctx, '16:59');
     await p.click('[data-attend="in"]'); await fillJoin(p, '끝나고도 남은 사람');
     await p.waitForFunction(() => /입실 확인/.test(document.querySelector('[data-attend-state]')?.textContent || ''));
     // 강사: 공지 + 5분 타이머 + 투표 열기
@@ -105,8 +107,8 @@ test('끝 시각을 넘겨 진행하는 강의(16:59:40 → 17:00:20): 공지·�
     const bandOk = () => { const n = document.querySelector('[data-now]'), t = n && n.querySelector('[data-timer]'); return !!n && !n.hidden && /5분만 더 할게요/.test(n.textContent) && !!t && !t.hidden && /\d:\d\d/.test(t.textContent); };
     await p.waitForFunction(bandOk, null, { timeout: 10000 });
     assert.equal(await p.locator('[data-poll-live] input').count(), 1, '열린 투표(낱말)');
-    // 17:00:20: 끝 시각을 20초 넘김(단계 확인은 30초마다)
-    await p.clock.fastForward('00:40'); await p.clock.runFor(31000);
+    // 16:59 → 17:00:20 무렵: 끝 시각을 넘김(단계 확인은 30초마다 — 31초를 더 흘려 그 확인이 한 번 돌게)
+    await p.clock.fastForward('01:20'); await p.clock.runFor(31000);
     assert.equal(await p.getAttribute('html', 'data-phase'), 'after', '단계는 끝남');
     assert.equal(await p.evaluate(bandOk), true, "'지금' 줄의 공지·타이머가 그대로");
     assert.equal(await vis(p, '[data-attend="out"]'), true, '[퇴실 확인]이 그대로');
@@ -151,7 +153,9 @@ test('퇴실: 입실하지 않은 사람이 [퇴실 확인]을 누르면 입실�
     assert.equal((await A.call('GET', '/participants', { admin: ADMIN })).body.length, before, "서버에 이름 없는 '참가자NNN'이 생기지 않음");
     // 이름을 적으면 그 이름으로 퇴실
     await p.click('[data-attend="out"]'); await fillJoin(p, '퇴실만 누른 사람');
-    await p.waitForFunction(() => /퇴실 확인/.test(document.querySelector('[data-attend-state]')?.textContent || ''), null, { timeout: 10000 });
+    await p.waitForFunction(() => /퇴실 확인/.test(document.querySelector('[data-attend-state]')?.textContent || ''), null, { timeout: 10000 }).catch(async (e) => {
+      throw new Error(e.message.split('\n')[0] + ' — ' + JSON.stringify(await p.evaluate(() => ({ open: document.querySelector('[data-join-dialog]').open, err: document.querySelector('[data-join-err]').textContent, toast: document.querySelector('[data-toast]').textContent, dot: document.querySelector('[data-live-status]')?.getAttribute('data-state'), phase: document.documentElement.getAttribute('data-phase') }))));
+    });
     const all = (await A.call('GET', '/participants', { admin: ADMIN })).body;
     assert.equal(all.length, before + 1);
     const who = all.find((x) => x.name === '퇴실만 누른 사람'); assert.ok(who && who.consentAt, '이름·동의가 함께');
