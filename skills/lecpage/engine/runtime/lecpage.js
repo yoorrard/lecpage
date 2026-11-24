@@ -916,7 +916,23 @@
       // 맨 위에 있고 더 내릴 곳이 있는 쪽에서, 도크 자리에 사이트가 놓은 누를 것이 걸릴 때만. 한 번 내리면 다시 감추지 않음(2026-11-24 실제 AI 사이트 넷 중 둘에서 첫 화면 단추가 도크 밑에 깔렸음)
       if (!hero0 && doc.elementsFromPoint) {
         var waitDone = false;
-        var onWaitScroll = function () { if (scrollY > 8) { waitDone = true; root.classList.remove('lp-dock-wait'); window.removeEventListener('scroll', onWaitScroll); } };
+        // 드러내는 때 — 어느 사이트에서도 도크가 끝내 숨은 채 남지 않게(2026-11-24 독립 검토: 창이 아니라 안쪽 칸이 스크롤되는 사이트에서는 창의 scroll이 오지 않아 계속 숨어 있었음):
+        // ① 어디서든 스크롤(안쪽 칸도 — 캡처로 받음) ② 내리려는 몸짓(휠·손가락·키. 사이트가 스크롤을 가로채도 캡처가 먼저 받음) ③ 창을 내릴 수 없는 쪽은 4초 뒤
+        var waitOff = function () {
+          if (waitDone) return;
+          waitDone = true; root.classList.remove('lp-dock-wait');
+          doc.removeEventListener('scroll', onWaitScroll, true); doc.removeEventListener('wheel', waitOff, true);
+          doc.removeEventListener('touchmove', waitOff, true); doc.removeEventListener('keydown', onWaitKey, true);
+        };
+        var onWaitScroll = function (e) {
+          var t = e.target, inner = t && t.nodeType === 1 && t !== root && t !== doc.body;
+          if ((inner ? t.scrollTop : (window.scrollY || root.scrollTop || doc.body.scrollTop || 0)) > 8) waitOff();
+        };
+        var onWaitKey = function (e) { if (/^(ArrowDown|PageDown|End| |Spacebar)$/.test(e.key)) waitOff(); };
+        var winScrolls = function () {
+          var hid = /hidden|clip/;
+          return root.scrollHeight - innerHeight > 8 && !hid.test(getComputedStyle(root).overflowY) && !hid.test(getComputedStyle(doc.body).overflowY);
+        };
         var dockCovers = function () {
           if (getComputedStyle(dock).position !== 'fixed') return false; // 사이트가 자리를 정해 놓은 도크는 떠 있지 않음
           var r = dock.getBoundingClientRect(); if (r.width < 8 || r.height < 8) return false;
@@ -932,9 +948,12 @@
         };
         var waitCheck = function () {
           if (waitDone || dock.hidden || root.classList.contains('lp-dock-wait')) return;
-          if (scrollY > 8) { waitDone = true; return; }
-          if (doc.documentElement.scrollHeight <= innerHeight + 40) return; // 내릴 곳이 없는 한 화면짜리 쪽은 그대로 둠(도크가 끝내 안 보이지 않게)
-          if (dockCovers()) { root.classList.add('lp-dock-wait'); window.addEventListener('scroll', onWaitScroll, { passive: true }); }
+          if ((window.scrollY || 0) > 8) { waitDone = true; return; }
+          if (!dockCovers()) return;
+          root.classList.add('lp-dock-wait');
+          doc.addEventListener('scroll', onWaitScroll, { capture: true, passive: true }); doc.addEventListener('wheel', waitOff, { capture: true, passive: true });
+          doc.addEventListener('touchmove', waitOff, { capture: true, passive: true }); doc.addEventListener('keydown', onWaitKey, true);
+          if (!winScrolls()) setTimeout(waitOff, 4000); // 창을 내릴 수 없는 쪽(한 화면짜리·슬라이더·안쪽 칸 스크롤): 몸짓이 없어도 곧 보이게
         };
         waitCheck(); setTimeout(waitCheck, 400); setTimeout(waitCheck, 1500);
       }

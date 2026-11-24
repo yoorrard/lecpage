@@ -5,14 +5,17 @@ import { listProblems } from '@hosting/sitecheck.js';
 import { ENGINE_FILES } from '@engine/src/kit/paths.js';
 
 // 암호로 잠근 사이트에 lecpage가 넣는 잠금 풀기 스크립트(engine/src/protect.js). 조립이 아니라 잠글 때 들어가는 파일이라 ENGINE_FILES에는 없음.
-// 이것을 사이트 스크립트로 보면 잠근 강사·발표·안내문 쪽마다 '보조 쪽의 사이트 스크립트'로 걸려, 암호 사이트는 바로 배포를 올리기도 전에 막혔음(2026-11-20~24)
+// 이것을 사이트 스크립트로 보면 잠근 강사·발표·안내문 쪽마다 '보조 쪽의 사이트 스크립트'로 걸려, 암호 사이트는 바로 배포를 올리기도 전에 막혔음(2026-11-20~24).
+// 잠근 사이트(잠금 화면이 든 쪽이 있음)일 때만: 잠그지 않은 사이트에 AI가 같은 이름으로 쓴 파일은 사이트 스크립트 그대로 봄(서버도 내용으로 가림)
 const LOCK_FILES = new Set(['assets/unlock.js']);
-/** 엔진 런타임이 아닌 .js(사이트가 직접 쓴 스크립트·조립이 옮긴 인라인 스크립트) */
-export const isOwnScript = (path) => /\.m?js$/i.test(path) && !ENGINE_FILES.has(path) && !LOCK_FILES.has(path);
+const td = new TextDecoder();
+const isLocked = (files) => Object.entries(files || {}).some(([p, v]) => /\.html?$/i.test(p) && (typeof v === 'string' ? v : v instanceof Uint8Array ? td.decode(v.subarray(0, 200000)) : '').includes('id="lp-locked"'));
+/** 엔진 런타임이 아닌 .js(사이트가 직접 쓴 스크립트·조립이 옮긴 인라인 스크립트). locked: 암호로 잠근 사이트(잠금 풀기 스크립트는 lecpage 파일) */
+export const isOwnScript = (path, locked = false) => /\.m?js$/i.test(path) && !ENGINE_FILES.has(path) && !(locked && LOCK_FILES.has(path));
 
 /** 조립 결과 → 서버 규칙에 걸리는 곳(파일마다 처음 하나) */
 export function hostProblems(files) {
-  try { return listProblems(files || {}, { isOwnScript }); } catch (e) { console.error('[host-check]', e); return []; }
+  try { const locked = isLocked(files); return listProblems(files || {}, { isOwnScript: (p) => isOwnScript(p, locked) }); } catch (e) { console.error('[host-check]', e); return []; }
 }
 
 /** HTML 안 위치 → 그 위치를 품은 섹션 id(없으면 '') */

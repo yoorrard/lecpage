@@ -451,10 +451,11 @@ export async function fitSiteForEdit(blobs, pid, site, sets = [], limits = null,
   const others = keys.filter((k) => !pages.includes(k));
   let base = 0; for (const k of others) base += sizeOf(await blobs.get(pid, 'site/' + k).catch(() => null));
   const used = pagesUsed(site);
-  // loose(커넥트 caps 'pages-kept'): 받지 않은 쪽 번호에 커넥트가 빈 자리 그림을 두므로, 범위(data-pages="1-300")나 스크립트가 만든 주소로 모든 쪽을 가리켜도 골라 보냄.
-  // 그림 주소로 하나하나 적힌 쪽만 꼭 보냄. 예전 커넥트는 전과 같이(모든 쪽을 가리키면 줄이지 않고 over로 알림)
-  const must = loose ? used.direct : used.all ? new Set(pages.map(numOf)) : used.nums;
-  const fit = await fitSiteImages(blobs, pid, pages, sets, null, limits, { must, base });
+  // 먼저 전과 같은 규칙: 사이트 글이 가리키는 쪽(교재 슬라이드가 고른 쪽·그림 주소)은 꼭 보냄 — 에이전트가 사이트가 실제로 보여 주는 쪽을 그대로 봄.
+  // 그것만으로 한도를 넘을 때만(범위 data-pages="1-300"·스크립트가 만든 주소로 모든 쪽을 가리키는 큰 사이트), 그리고 커넥트가 받지 않은 번호에
+  // 빈 자리 그림을 두는 판일 때만(loose — caps 'pages-kept') 그림 주소로 하나하나 적힌 쪽만 꼭 보내고 나머지는 골라 보냄. 예전 커넥트는 전과 같이 over로 알리고 멈춤
+  let fit = await fitSiteImages(blobs, pid, pages, sets, null, limits, { must: used.all ? new Set(pages.map(numOf)) : used.nums, base });
+  if (fit.over && loose) fit = await fitSiteImages(blobs, pid, pages, sets, null, limits, { must: used.direct, base });
   if (!fit.cut && !fit.over) return { only: null, total: pages.length, sent: pages.length, over: false, mb: 0, last: fit.last };
   let bytes = base; if (fit.over) for (const p of fit.list) bytes += sizeOf(await blobs.get(pid, 'site/' + p).catch(() => null));
   return { only: [...others, ...fit.list], total: pages.length, sent: fit.list.length, over: fit.over, mb: Math.ceil(bytes / MiB), last: fit.last };

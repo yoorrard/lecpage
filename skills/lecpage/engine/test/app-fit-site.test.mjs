@@ -131,3 +131,16 @@ test('fitSiteForEdit(loose): 사이트가 모든 쪽을 범위·코드로 가리
   assert.ok(loose.only.includes('material/p-042.webp') && loose.only.includes('files/a.pdf'), '그림 주소로 적힌 쪽·자료실 파일은 꼭 감');
   assert.ok(loose.only.includes('material/p-001.webp') && loose.only.includes('material/p-100.webp'), '처음·끝 쪽도 감');
 });
+
+// 독립 검토(2026-11-24 밤): loose가 '모든 쪽을 가리키는 큰 사이트'뿐 아니라 모든 사이트에 적용돼, 교재 슬라이드가 고른 몇 쪽(data-pages="12, 40, 77")이
+// 꼭 보낼 쪽에서 빠지고 빈 자리 그림으로 갔음 → 전과 같은 규칙을 먼저 쓰고, 그것만으로 한도를 넘을 때만 느슨하게
+test('fitSiteForEdit(loose): 교재 슬라이드가 고른 쪽은 그대로 꼭 보냄 — 느슨한 규칙은 전 규칙이 한도를 넘을 때만', async () => {
+  const L = await local();
+  const { blobs } = fake(300, 480);
+  const site = { 'index.html': '<div data-lp="deck" data-pages="12, 40, 77, 133, 201"></div><img src="material/p-012.webp" alt="">' };
+  for (const loose of [false, true]) {
+    const fit = await L.fitSiteForEdit(blobs, 'p', site, [], { siteMB: 40 }, { loose });
+    assert.equal(fit.over, false);
+    for (const n of ['012', '040', '077', '133', '201']) assert.ok(fit.only.includes(`material/p-${n}.webp`), `loose=${loose}: 교재 슬라이드가 고른 ${n}쪽이 감`);
+  }
+});

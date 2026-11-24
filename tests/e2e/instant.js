@@ -40,7 +40,7 @@ async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarg
     if (/\/deploys$/.test(u.pathname) && st.gone?.has(u.pathname.split('/')[3])) return json({ error: { code: 'not_found', message_ko: '없는 사이트예요.' } }, 404);
     if (/\/publish$/.test(u.pathname) && st.failPublish > 0) { st.failPublish--; return json({ error: { code: 'internal', message_ko: '서버 오류' } }, 500); }
     if (/\/publish$/.test(u.pathname) && failPublish > 0) { failPublish--; return json({ error: { code: 'internal', message_ko: '서버 오류' } }, 500); }
-    if (/\/publish$/.test(u.pathname) && !unsafe) return json({ url: `https://s-${u.pathname.split('/')[3]}.example.pages.dev/`, expiresAt: Date.now() + 60 * 864e5 });
+    if (/\/publish$/.test(u.pathname) && !unsafe) { if (st.pubHold) await st.pubHold; return json({ url: `https://s-${u.pathname.split('/')[3]}.example.pages.dev/`, expiresAt: Date.now() + 60 * 864e5 }); }
     if (u.pathname === '/api/sites' && m === 'POST') return json({ id: 'site1', key: 'k1', url: 'https://s-site1.example.pages.dev/', expiresAt: Date.now() + 60 * 864e5 });
     // 받은 배포 목록을 적어 둠(시험이 무엇이 올라갔는지 봄). takeAll: 목록의 파일을 모두 올려받는 서버(처음 배포처럼)
     if (/\/deploys$/.test(u.pathname)) { const files = r.request().postDataJSON()?.files || {}; st.manifests.push(files); return json({ deploy: 'd1', missing: takeAll ? [...new Set(Object.values(files).map((f) => f.sha256))] : [] }); }
@@ -476,28 +476,45 @@ async function seed(p, script) {
     L.ok('slow server answer: instant deploy is the choice once it arrives', /바로 배포/.test(end.on) && end.big === '배포하기' && Date.now() - t0 < 12000, JSON.stringify(end));
     L.ok('no page errors ⑯', errs.length === 0, JSON.stringify(errs)); await ctx.close();
   }
-  { // ⑲ 다른 탭에서 이 연수를 고쳐 이 탭이 저장을 멈춘 동안에는 배포하지 않음(배포한 주소·수정 키를 저장하지 못해 새로 고치면 그 사이트를 다룰 길이 없어짐)
+  { // ⑲ 다른 탭에서 이 연수를 고쳐 이 탭이 저장을 멈춘 동안: 이 화면의 단추가 잠기고(누를 곳은 [이 탭으로 다시 불러오기] 하나) 배포하지 않음. 다시 불러오면 배포됨.
+    //    배포가 도는 사이 다른 탭이 저장해도 배포 기록(주소·수정 키)은 저장소에 남음(새로 고쳐도 완료 카드가 그대로)
     const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } }); const st = await server(ctx, { siteScripts: true });
     const p = await ctx.newPage(); const errs = L.watch(p);
     await seed(p, true);
     const other = await ctx.newPage(); await other.goto(p.url().replace(/\/3$/, '/2'), { waitUntil: 'load' });
     await other.waitForSelector('.st-panel', { timeout: 60000 });
-    // 다른 탭에서 저장을 일으킴: 자료 하나를 더함(연수에 적힘)
-    const fileIn = other.locator('.st-panel input[type=file]').first();
-    const changed = await fileIn.count() === 1; if (changed) { await fileIn.setInputFiles({ name: '확인 메모.txt', mimeType: 'text/plain', buffer: Buffer.from('다른 탭에서 더한 자료') }); await other.waitForTimeout(2500); }
+    const addFile = async (name) => { const fileIn = other.locator('.st-panel input[type=file]').first(); if (await fileIn.count() !== 1) return false; await fileIn.setInputFiles({ name, mimeType: 'text/plain', buffer: Buffer.from('다른 탭에서 더한 자료 ' + name) }); await other.waitForTimeout(2500); return true; };
+    const changed = await addFile('확인 메모.txt');
     await p.waitForSelector('.save-band', { timeout: 15000 }).catch(() => {});
     const band = await p.locator('.save-band').count();
     const before = st.sites || 0;
-    if (band) { await p.click('.publish .btn-primary.btn-lg'); await p.waitForTimeout(1500); }
+    const locked = await p.evaluate(() => ({ note: !!document.querySelector('[data-stale-note]'), big: [...document.querySelectorAll('.publish .btn-primary.btn-lg')].map((x) => x.matches(':disabled')), primaries: [...document.querySelectorAll('.btn-primary')].filter((x) => x.offsetParent && !x.matches(':disabled') && !x.closest('[inert]')).map((x) => x.textContent.trim()) }));
     L.ok('another tab changed the project → this tab shows the "다른 탭에서 고쳤어요" band', changed && band === 1, `changed ${changed} band ${band}`);
-    L.ok('deploy from the tab that stopped saving is refused with a reason (no site is made)', band === 1 && (st.sites || 0) === before && /다시 불러오기/.test(await p.locator('.toast, [role=status], [role=alert]').allInnerTexts().then((a) => a.join(' '))), `sites ${st.sites || 0}`);
+    L.ok('while this tab is not saving: the deploy button is locked, a line says why, and the only primary action is [이 탭으로 다시 불러오기]', locked.note && locked.big.length >= 1 && locked.big.every(Boolean) && locked.primaries.length === 1 && /다시 불러오기/.test(locked.primaries[0]), JSON.stringify(locked));
+    await p.waitForTimeout(800);
+    L.ok('no site is made from the locked tab', (st.sites || 0) === before, `sites ${st.sites || 0}`);
     if (band) { await p.click('.save-band .btn-primary'); await p.waitForSelector('.save-band', { state: 'detached', timeout: 15000 }).catch(() => {}); }
-    await other.close();
-    await p.waitForSelector('.publish .btn-primary.btn-lg', { timeout: 30000 });
+    await p.waitForSelector('.publish .btn-primary.btn-lg:not(:disabled)', { timeout: 30000 });
+    // 배포를 누른 뒤 서버가 공개를 붙잡고 있는 사이(배포가 도는 중) 다른 탭이 저장함
+    let release; st.pubHold = new Promise((res) => { release = res; });
     await p.click('.publish .btn-primary.btn-lg');
     await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await p.waitForTimeout(1500);
+    // (배포를 시작하며 이 탭이 한 번 저장했으므로, 다른 탭은 먼저 최신 판을 다시 불러온 뒤 고침 — 그래야 다른 탭의 저장이 실제로 일어남)
+    if (await other.locator('.save-band').count()) { await other.click('.save-band .btn-primary'); await other.waitForSelector('.save-band', { state: 'detached', timeout: 15000 }).catch(() => {}); await other.waitForSelector('.st-panel', { timeout: 30000 }); }
+    const changed2 = await addFile('둘째 메모.txt');
+    await p.waitForSelector('.save-band', { timeout: 15000 }).catch(() => {});
+    const bandMid = await p.locator('.save-band').count();
+    release(); st.pubHold = null;
     await p.waitForSelector('.success .big-url', { timeout: 30000 }).catch(() => {});
-    L.ok('after [이 탭으로 다시 불러오기] the deploy goes through', (st.sites || 0) === before + 1 && await p.locator('.success .big-url').count() === 1, `sites ${st.sites || 0}`);
+    const shown = await p.locator('.success .big-url').count();
+    await p.waitForTimeout(1500);
+    L.ok('deploy finishes while another tab saved: the result is shown', changed2 && bandMid === 1 && (st.sites || 0) === before + 1 && shown === 1, `changed2 ${changed2} band ${bandMid} sites ${st.sites || 0} shown ${shown}`);
+    await other.close();
+    await p.reload({ waitUntil: 'load' }); await p.waitForSelector('.success .big-url, .publish', { timeout: 30000 }); await p.waitForTimeout(1500);
+    const after = await p.evaluate(() => ({ url: document.querySelector('.success .big-url')?.textContent.trim() || '', files: document.body.innerText.includes('둘째 메모') }));
+    const proj = await L.readProject(p, L.pidOf(p));
+    L.ok('after a reload the deploy record is still there (address and site key), and the other tab\'s change too', /s-site1\./.test(after.url) && !!proj.deploy?.lecpage?.key && (proj.site?.['files/둘째 메모.txt'] !== undefined || (proj.meta?.materials || proj.materials || []).some?.((m) => /둘째 메모/.test(m.name || m.title || '')) || JSON.stringify(proj).includes('둘째 메모')), JSON.stringify({ url: after.url, key: !!proj.deploy?.lecpage?.key, other: JSON.stringify(proj).includes('둘째 메모') }));
     L.ok('no page errors ⑲', errs.length === 0, JSON.stringify(errs)); await ctx.close();
   }
   { // ⑳ 공개 범위를 암호로 한 사이트도 바로 배포됨: 올리기 전 검사가 잠금 풀기 스크립트(assets/unlock.js)를 사이트 스크립트로 보고 막지 않음

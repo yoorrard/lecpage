@@ -492,6 +492,21 @@ test('jobs: Claude로 교재 PDF → events(단계) → result(site·meta·issue
   assert.deepEqual(Object.keys(RK.site).filter((k) => k.startsWith('material/')).sort(), ['material/p-001.webp', 'material/p-006.webp'], '빈 자리 그림은 결과에 없음(앱의 진짜 그림을 덮지 않음)');
   assert.ok(!(RK.dropped || []).some((x) => /material\/p-00[2-5]/.test(x)), '뺐다고 알리지도 않음');
   assert.ok(St.CAPS.includes('pages-kept'), '앱이 이 커넥트에는 골라 보내도 된다고 앎');
+  // 빈 자리 그림은 진짜 쪽과 같은 비율(1×1이면 이 폴더의 조립이 그 쪽들을 정사각형으로 잡음)
+  { const { imageSize } = await import('../src/kit/assemble.js'); const z = imageSize(new Uint8Array(St.holeImage(160, 90))); assert.deepEqual([z.w, z.h], [160, 90]); const t = imageSize(new Uint8Array(St.holeImage(160, 207))); assert.deepEqual([t.w, t.h], [160, 207]); }
+
+  // 새로 만들 때도 같음(앱이 쪽 그림을 골라 보냄): 작업 지시가 '모든 쪽 그림이 들어가요'라고 하니 AI가 교재 슬라이드를 모든 쪽으로 적는데,
+  // 빈 자리 그림이 없으면 이 폴더의 확인이 '쪽 그림이 없어요 … 있는 쪽 안으로 맞춰'라고 해 에이전트가 쪽을 줄였음
+  rmSync(LOG, { force: true });
+  const mk = await req(port, 'POST', '/bridge/jobs', { headers: O, body: { agent: 'claude', kind: 'make', request: '', pagesKept: 5, files: [{ name: 'a.md', base64: Buffer.from('# 연수\n\n내용').toString('base64'), pageImages: true }], site: { 'material/p-001.webp': pg, 'material/p-005.webp': pg } } });
+  assert.equal(mk.status, 202, mk.text);
+  const evM = await events(port, token, mk.json().jobId);
+  assert.equal(evM.at(-1).type, 'done', JSON.stringify(evM.slice(-3)));
+  const crM = readLog().find((l) => l.id === 'claude' && l.argv);
+  assert.deepEqual((crM.shots || []).filter((n) => /^p-\d+\./.test(n)).sort(), ['p-001.webp', 'p-002.webp', 'p-003.webp', 'p-004.webp', 'p-005.webp'], '만들 때도 모든 번호에 그림');
+  assert.match(crM.task, /여기에는 2장만 받았고\(나머지 번호에는 빈 자리 그림을 두었어요\), 배포한 사이트에는 p-001~p-005 모든 쪽 그림이 들어가요/);
+  const RM = (await req(port, 'GET', `/bridge/jobs/${mk.json().jobId}/result`, { headers: O })).json();
+  assert.ok(!Object.keys(RM.site).some((k) => /material\/p-00[2-4]/.test(k)), '빈 자리 그림은 결과에 없음');
 
   // 에이전트가 사이트를 못 쓰면 오류, 허용 밖 도구가 켜져 있으면 멈춤
   const fail1 = await req(port, 'POST', '/bridge/jobs', { headers: O, body: { agent: 'claude', kind: 'edit', request: '[fake:nosite]', site: { 'index.html': '<!doctype html>' } } });

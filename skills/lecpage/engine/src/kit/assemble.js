@@ -24,7 +24,7 @@ export const FRAME_SOURCES = ['https://www.youtube-nocookie.com', 'https://playe
 const enc = (v) => (typeof v === 'string' ? new TextEncoder().encode(v).length : v?.byteLength || 0);
 const asText = (v) => (typeof v === 'string' ? v : v instanceof Uint8Array || v instanceof ArrayBuffer ? new TextDecoder().decode(v) : '');
 /** 그림 머리만 읽어 크기(webp·png·jpeg). 모르면 null — 교재 슬라이드가 A4 세로 교재를 16:9 칸에 작게 넣지 않게 비율을 알려 줌 */
-function imageSize(v) {
+export function imageSize(v) {
   const b = v instanceof ArrayBuffer ? new Uint8Array(v) : v instanceof Uint8Array ? v : null;
   if (!b || b.length < 30) return null;
   const s = (i, n) => String.fromCharCode(...b.subarray(i, i + n));

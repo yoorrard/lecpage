@@ -686,6 +686,90 @@
    "head": "/*! lecpage unlock — 암호로 잠근 연수 사",
    "sha256": "35ca8f60692c9538729ff15e54943e7d15f6c99f50e39ec825ff9a0b7fbafd8e",
    "kept": "2026-11-24"
+  },
+  {
+   "name": "boot.js",
+   "len": 1883,
+   "head": "/* lecpage boot: 첫 그리기 전에 테마·움직임",
+   "sha256": "ede94a1528461938a2fd865199f1d7b17b53d1393db2427f67b04ec36351eeee",
+   "kept": "2026-11-24"
+  },
+  {
+   "name": "check.js",
+   "len": 12096,
+   "head": "/* lecpage check — 접속 확인: 연수에 쓰는",
+   "sha256": "82efd21c8380193090b6a0d218718218fc45c3ee1210344475533abe7c711f88",
+   "kept": "2026-11-24"
+  },
+  {
+   "name": "console.js",
+   "len": 97618,
+   "head": "/* lecpage console — 강사 화면. 모든 화",
+   "sha256": "f44f7df87f26bb117419627dd0bba34e6769d2c2dfdc3809c944dc3befb3aa81",
+   "kept": "2026-11-24"
+  },
+  {
+   "name": "lecpage.js",
+   "len": 125706,
+   "head": "/* lecpage runtime — 참가자 화면. 빌드 ",
+   "sha256": "dddb1ec7c131bae96dde106e5140cb2b56ddd495aaa86ffc659759ba48c51972",
+   "kept": "2026-11-24"
+  },
+  {
+   "name": "live/core.js",
+   "len": 83005,
+   "head": "/*! lecpage live core — window.L",
+   "sha256": "6ff8c5c5097318b047a1a7d757b0585f68df49b4c8a1efbac9bc26245b882d7f",
+   "kept": "2026-11-24"
+  },
+  {
+   "name": "live/http.js",
+   "len": 32443,
+   "head": "/*! lecpage live — provider 'htt",
+   "sha256": "abe319aebe0f57b172b6cc6fccfea7f194fe647a0465e72fa157d4ce0a22045b",
+   "kept": "2026-11-24"
+  },
+  {
+   "name": "live/local.js",
+   "len": 14075,
+   "head": "/*! lecpage live — provider 'loc",
+   "sha256": "7e24419a57b39b1ada4a2c6c72a776fc0f14b6864f5783e5e1232033ec9045ea",
+   "kept": "2026-11-24"
+  },
+  {
+   "name": "live/sheets.js",
+   "len": 8860,
+   "head": "/*! lecpage live — provider 'she",
+   "sha256": "0695122b538d0c52464fb2d2b26150f5078110e4b603952b9a86c3d57b138fdf",
+   "kept": "2026-11-24"
+  },
+  {
+   "name": "live/supabase.js",
+   "len": 22582,
+   "head": "/*! lecpage live — provider 'sup",
+   "sha256": "d7a5cd88ff7733109c71ed1a292fe0f2e2f2d0dfb42298b3ea9cca23cf441e58",
+   "kept": "2026-11-24"
+  },
+  {
+   "name": "screen.js",
+   "len": 42978,
+   "head": "/* lecpage screen — 발표 화면: 교재 쪽(",
+   "sha256": "a44a13266c03b82f5c9e4e2f935bf4c56afdb6acfb33f927329f5a0ada993c02",
+   "kept": "2026-11-24"
+  },
+  {
+   "name": "unlock.js",
+   "len": 7880,
+   "head": "/*! lecpage unlock — 암호로 잠근 연수 사",
+   "sha256": "f4bcf0ce0a8d65884fc166b223b4f63eaaa72d102ea2c8b31d1d81be4039e630",
+   "kept": "2026-11-24"
+  },
+  {
+   "name": "vendor/qrcode.js",
+   "len": 58037,
+   "head": "/*!\n * qrcode-generator 1.4.4 (Q",
+   "sha256": "44377a74aa7168f39dad0c4856151a780db12582cbcc85c3b86db1b64c70b631",
+   "kept": "2026-11-24"
   }
  ]
 }

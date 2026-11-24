@@ -522,13 +522,31 @@ test('브라우저: 도크가 첫 화면의 단추를 덮으면 처음 내릴 �
     const s = await dockState(page);
     assert.ok(!s.wait && s.opacity === '1', '덮지 않으면 그대로 ' + JSON.stringify(s));
   });
-  // ③ 내릴 곳이 없는 한 화면짜리 쪽: 덮더라도 감추지 않음(도크가 끝내 안 보이지 않게)
-  const one = BARE('<header style="height:calc(100vh - 16px);display:flex;flex-direction:column;justify-content:flex-end;box-sizing:border-box;padding:0 16px 8px;overflow:hidden"><a id="cta" href="#x" style="display:block;padding:16px;background:#222;color:#fff">단추</a><div hidden data-lp="qa"></div></header>');
-  await withSite(K.assemble({ 'index.html': one }, META, { runtime: rt }).files, async (page, base) => {
+  // ③ 창이 아니라 안쪽 칸이 스크롤되는 사이트(html·body가 넘침을 감춤 — 스크롤 스냅·슬라이더): 창의 scroll이 오지 않아도 안쪽 스크롤·몸짓으로 드러남(전에는 끝내 숨어 있었음)
+  const INNER = (css) => BARE(`<style>${css}</style><div id="scroller"><header style="min-height:100vh;display:flex;flex-direction:column;justify-content:flex-end;padding:24px 16px 20px;box-sizing:border-box"><h1>첫 화면</h1><a id="cta" href="#qa" style="display:block;padding:16px;text-align:center;background:#222;color:#fff">출석하고 시작하기</a></header><section id="qa" style="min-height:130vh"><h2>질문</h2><div data-lp="qa"></div></section></div>`);
+  for (const [name, css, act] of [
+    ['body가 스크롤', 'html{overflow:hidden;height:100%}body{overflow-y:auto;height:100%;margin:0}', (page) => page.mouse.wheel(0, 600)],
+    ['안쪽 칸이 스크롤', 'html,body{overflow:hidden;height:100%;margin:0}#scroller{height:100vh;overflow-y:auto}', (page) => page.evaluate(() => { document.querySelector('#scroller').scrollTop = 400; })],
+    ['손가락·휠만(스크롤을 가로챈 슬라이더)', 'html,body{overflow:hidden;height:100%;margin:0}#scroller{height:100vh;overflow:hidden}', (page) => page.evaluate(() => document.dispatchEvent(new WheelEvent('wheel', { deltaY: 100, bubbles: true })))],
+  ]) {
+    await withSite(K.assemble({ 'index.html': INNER(css) }, META, { runtime: rt }).files, async (page, base) => {
+      await page.goto(base + '?phase=during'); await page.waitForFunction(() => document.documentElement.classList.contains('lp-dock-on'));
+      await page.waitForTimeout(700);
+      const top = await dockState(page);
+      assert.ok(top.wait && top.opacity === '0', `${name}: 맨 위에서는 감춤 ` + JSON.stringify(top));
+      await page.mouse.move(195, 300); await act(page); await page.waitForTimeout(600);
+      const after = await dockState(page);
+      assert.ok(!after.wait && after.opacity === '1', `${name}: 스크롤·몸짓 뒤 나타남 ` + JSON.stringify(after));
+    });
+  }
+  // ④ 내릴 곳도 몸짓도 없는 한 화면짜리 쪽: 4초 뒤에는 나타남(끝내 숨어 있지 않음)
+  await withSite(K.assemble({ 'index.html': INNER('html,body{overflow:hidden;height:100%;margin:0}#scroller{height:100vh;overflow:hidden}') }, META, { runtime: rt }).files, async (page, base) => {
     await page.goto(base + '?phase=during'); await page.waitForFunction(() => document.documentElement.classList.contains('lp-dock-on'));
-    await page.waitForTimeout(1900);
-    const s = await page.evaluate(() => ({ wait: document.documentElement.classList.contains('lp-dock-wait'), scroll: document.documentElement.scrollHeight - innerHeight }));
-    if (s.scroll <= 40) assert.equal(s.wait, false, '한 화면짜리 쪽 ' + JSON.stringify(s));
+    await page.waitForTimeout(700);
+    assert.equal((await dockState(page)).wait, true, '처음에는 감춤');
+    await page.waitForFunction(() => !document.documentElement.classList.contains('lp-dock-wait'), null, { timeout: 8000 });
+    await page.waitForTimeout(500); // 나타나는 움직임(0.25초)이 끝난 뒤
+    assert.equal((await dockState(page)).opacity, '1', '몸짓이 없어도 곧 나타남');
   });
 });
 

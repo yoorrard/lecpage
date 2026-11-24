@@ -141,7 +141,7 @@ function coverOf(p, pageNums) {
  */
 const hostFileLimit = (to) => { const l = E.HOSTS[to]?.limit; const mb = l?.fileMB || l?.siteMB; return mb ? { maxFileBytes: mb * 1024 * 1024 } : null; };
 
-export function StepShare({ p, update, go, stale }) {
+export function StepShare({ p, update, go, stale, stopped, storeNow }) {
   const bp = deployView(p);
   const [busy, setBusy] = useState('');
   const [prog, setProg] = useState(null);
@@ -358,7 +358,7 @@ export function StepShare({ p, update, go, stale }) {
     const nx = mergeSite(p.deploy, url, to, { live: siteLive, keepMain, lock });
     const moved = !nx.lastUrl || (!!p.deploy?.lastUrl && same(nx.lastUrl) !== same(p.deploy.lastUrl));
     if (moved && bp.meta?.shortUrl) toast('사이트 주소가 바뀌어 짧은 주소를 지웠어요. 다시 만들어 주세요.');
-    update((cur) => {
+    const result = (cur) => {
       const m = mergeSite(cur.deploy, url, patch?.target || cur.deploy?.target || '', { live: siteLive, keepMain, lock });
       return {
         pastDeploy: undefined, carryPending: undefined, // 이 기기에서 배포했으니 다른 기기에서 가져온 지난 배포 표시는 거둠
@@ -366,7 +366,11 @@ export function StepShare({ p, update, go, stale }) {
         ...patchDeploy(cur, (b) => ({ ...b, meta: { ...b.meta, siteUrl: m.lastUrl, ...(moved ? { shortUrl: '' } : {}) }, ...(more?.live ? { live: { ...b.live, ...more.live } } : {}) })),
         ...(more && 'liveOk' in more ? { liveOk: more.liveOk } : {}),
       };
-    }, { now: true }); // 배포·배포 취소의 결과(주소·사이트 열쇠)는 바로 저장: 곧바로 창이 닫히거나 죽어도 배포한 사이트를 다시 다룰 수 있게
+    };
+    update(result, { now: true }); // 배포·배포 취소의 결과(주소·사이트 열쇠)는 바로 저장: 곧바로 창이 닫히거나 죽어도 배포한 사이트를 다시 다룰 수 있게
+    // 배포가 도는 사이(몇 초~1분) 다른 탭이 이 연수를 저장하면 이 탭은 저장을 멈춤(덮어쓰지 않게) → 위 저장이 버려져, 다시 불러오면 방금 배포한 주소·수정 키가 사라졌음.
+    // 그때는 결과만 저장소의 지금 판(다른 탭이 고친 것) 위에 바로 얹음: 다른 탭의 고친 내용도, 이 배포 기록도 남음
+    if (stopped?.() && storeNow) storeNow(result).then(() => toast('배포 기록을 저장했어요. 다른 탭에서 고친 내용은 [이 탭으로 다시 불러오기]로 이어서 봐요.'), () => { });
   }
   /** 참가자에게 알릴 대표 주소를 배포한 곳 가운데에서 바꿈: 완료 카드·QR·강사 화면·QR 안내문이 이 주소를 따름 */
   function setPrimary(t, sure = false) {
@@ -449,7 +453,7 @@ export function StepShare({ p, update, go, stale }) {
     body: (open.access || needPw) && <>
       <div class="radio-cards" role="radiogroup" aria-label="공개 범위">
         {[['link', '주소를 받은 사람만', '검색에 나오지 않아요. 주소나 QR을 받은 사람만 들어와요.'], ['password', '암호를 아는 사람만', '교재 그림까지 암호로 잠가요. 안내 QR로 들어오면 바로 열려요.'], // 바로 배포 서버는 모든 사이트를 검색에서 뺌(hosting: x-robots-tag noindex) → 그곳을 골랐을 때는 '검색에도 나와요'라고 하지 않음(2026-11-24 운영에서 확인)
-          ['public', '누구나', target === 'lecpage' ? '주소를 아는 누구나 열어요. 바로 배포한 사이트는 검색에는 나오지 않아요(검색에 나오게 하려면 다른 곳에 배포).' : '검색에도 나와요. 공개 강의 홍보용이에요.']].map(([v, t, d]) => (
+          ['public', '누구나', instantHere ? '주소를 아는 누구나 열어요. 바로 배포한 사이트는 검색에는 나오지 않아요(검색에 나오게 하려면 다른 곳에 배포).' : '검색에도 나와요. 공개 강의 홍보용이에요.']].map(([v, t, d]) => (
           <label class="radio-card"><input type="radio" name="access" checked={access === v} onChange={() => setAccess(v)} /><span><b>{t}</b><small>{d}</small></span></label>
         ))}
       </div>
@@ -505,8 +509,11 @@ export function StepShare({ p, update, go, stale }) {
     <>
       <StepHead title="배포하기" desc={p.deploy?.lastUrl ? '고친 내용은 [다시 배포하기]를 누르면 같은 주소에 반영돼요.' : (p.demo ? '아래 순서대로 확인하고 [배포 연습하기]를 누르면 참가자에게 보낼 주소와 QR이 나와요.' : '아래 순서대로 확인하고 맨 아래 버튼을 누르면 참가자에게 보낼 주소와 QR이 나와요.')}>
         {/* 체크리스트가 다 끝났으면 맨 위에도 같은 단추(1366×768에서 아래 단추가 첫 화면 밖) */}
-        {!p.demo && !p.deploy?.lastUrl && !rows.some((r) => r.state === 'todo') && <button class={`btn${!hostSeen ? ' btn-primary' : ''}`} disabled={!!busy} onClick={() => (goNow.current ? goNow.current() : toNext())}>배포하기</button>}
+        {!p.demo && !p.deploy?.lastUrl && !rows.some((r) => r.state === 'todo') && <button class={`btn${!hostSeen ? ' btn-primary' : ''}`} disabled={!!busy || !!stale} onClick={() => (goNow.current ? goNow.current() : toNext())}>배포하기</button>}
       </StepHead>
+      {/* 다른 탭에서 이 연수를 고쳐 이 탭이 저장을 멈춘 동안: 이 화면의 단추를 모두 잠금(배포·배포 취소·주소 저장의 결과를 적지 못함). 누를 곳은 위 빨간 띠의 [이 탭으로 다시 불러오기] 하나 */}
+      {stale && <p class="small warn-line" role="status" data-stale-note>다른 탭에서 이 연수를 고쳤어요. [이 탭으로 다시 불러오기]를 누르면 여기서 이어서 배포할 수 있어요.</p>}
+      <fieldset class="plain-fieldset" disabled={!!stale} inert={!!stale}>{/* inert: 단추처럼 보이는 링크(새 구글 시트 열기 등)도 함께 잠금 */}
       {p.demo && <DemoPublish p={p} buildFiles={buildFiles} />}
       {p.deploy?.lastUrl && <Success p={p} bp={bp} update={update} onEdit={() => go(2)} onRepublish={republish} onPrimary={setPrimary} busy={busy} onZip={() => guard((o) => zip(o), false, 'zip')} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} exp={exp} days={info?.limits?.days} />}
 
@@ -530,6 +537,7 @@ export function StepShare({ p, update, go, stale }) {
           {!p.demo && <div class="btn-row"><button class="btn btn-sm" onClick={teacherDoc}>강사용 파일 다운로드</button><span class="small muted">운영 안내·연수 정보·사이트 원본·인쇄본. 사이트에는 올라가지 않아요.</span></div>}
         </div>
       </Sheet>
+      </fieldset>
       <div class="step-foot"><button class="btn btn-quiet" onClick={() => go(2)}>이전</button><a class="btn" href="#/">처음으로</a></div>
 
       <Dialog open={!!askRoom} onClose={() => setAskRoom(null)} label="지난 기록 확인">

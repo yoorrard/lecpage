@@ -18,6 +18,7 @@ import { spawn } from 'node:child_process';
 import { randomBytes, timingSafeEqual, createHash, createHmac } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync, statSync, copyFileSync, createReadStream, realpathSync, renameSync, chmodSync } from 'node:fs';
 import { tmpdir, homedir, totalmem } from 'node:os';
+import { deflateSync } from 'node:zlib';
 import path, { join, resolve, dirname, extname, relative, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createSiwc, callbackPage } from './studio-siwc.mjs';
@@ -917,12 +918,28 @@ export function secretShapes(site, { home = homedir(), ws = '' } = {}) {
  */
 const DOC_EXT = /\.(pdf|pptx?|ppsx|docx?|hwpx?|xlsx?|zip|key|pages|numbers|odt|odp|ods)$/i;
 const sha256 = (b) => createHash('sha256').update(b).digest('hex');
-/** 빈 자리 그림(1×1 WebP): 고칠 때 앱이 보내지 않은 쪽 번호에 잠깐 둠(작업 지시가 그렇게 알림). 결과에는 넣지 않음 */
-const HOLE_IMAGE = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');
-/** 두었던 빈 자리 그림을 지움(그대로인 것만 — 에이전트가 그 이름으로 다른 그림을 썼으면 남겨, 아래 '강사가 주지 않은 파일' 검사가 거름) */
+/**
+ * 빈 자리 그림(연한 회색 PNG, w×h): 앱이 크기 때문에 보내지 않은 쪽 번호에 잠깐 둠(작업 지시가 그렇게 알림). 결과에는 넣지 않음.
+ * 진짜 쪽과 같은 비율로 만듦: 1×1로 두면 이 폴더의 조립이 그 쪽들을 정사각형으로 잡아(첫 쪽이 빠졌으면 교재 전체가) 에이전트가 화면 그림을 보고 CSS를 '고치려' 들 수 있음
+ */
+export function holeImage(w = 160, h = 90) {
+  const t = holeImage.t || (holeImage.t = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; }));
+  const crc = (buf) => { let c = 0xffffffff; for (const x of buf) c = t[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const td = Buffer.concat([Buffer.from(type), data]), len = Buffer.alloc(4), sum = Buffer.alloc(4); len.writeUInt32BE(data.length); sum.writeUInt32BE(crc(td)); return Buffer.concat([len, td, sum]); };
+  const head = Buffer.alloc(13); head.writeUInt32BE(w, 0); head.writeUInt32BE(h, 4); head[8] = 8; head[9] = 0; // 8비트 회색
+  const row = Buffer.alloc(1 + w, 0xe6); row[0] = 0;
+  return Buffer.concat([Buffer.from([0x89, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', head), chunk('IDAT', deflateSync(Buffer.concat(Array.from({ length: h }, () => row)))), chunk('IEND', Buffer.alloc(0))]);
+}
+/** 두었던 빈 자리 그림을 지움: 그 자리의 파일은 무엇이든(에이전트가 그 이름으로 다른 그림을 썼어도) 결과에 넣지 않음 — 앱에 진짜 쪽 그림이 그대로 있음 */
 function dropHoles(job) {
-  for (const f of job.holes || []) { try { if (readFileSync(f).equals(HOLE_IMAGE)) rmSync(f, { force: true }); } catch { /* 이미 없음 */ } }
+  for (const f of job.holes || []) { try { rmSync(f, { force: true }); } catch { /* 이미 없음 */ } }
   job.holes = [];
+}
+/** 결과에서: 빈 자리 그림과 내용이 같은 파일(에이전트가 다른 이름으로 옮겨 둔 것)을 뺌 → 뺀 경로 */
+function dropHoleCopies(site, job) {
+  const out = []; const shas = job.holeShas; if (!shas || !shas.size) return out;
+  for (const [rel, v] of Object.entries(site)) { if (typeof v === 'string' || typeof v?.base64 !== 'string') continue; if (shas.has(sha256(Buffer.from(v.base64, 'base64')))) { delete site[rel]; out.push(rel); } }
+  return out;
 }
 const MAGIC = (() => {
   const at = (b, off, sig) => b.length >= off + sig.length && sig.every((x, i) => b[off + i] === (typeof x === 'string' ? x.charCodeAt(0) : x));
@@ -1106,7 +1123,7 @@ async function runJob(S, job) {
     const pageImages = shots.length ? { first: shots[0].n, last: shots.at(-1).n, count: new Set(shots.map((x) => x.n)).size, exts: [...new Set(shots.map((x) => extname(x.name).slice(1).toLowerCase()))], sample: shots[0].name, multi: materialItems(inp.materials.map((m) => m.name)) > 1, given: appImages, owner, ...(setsOut.length > 1 ? { sets: setsOut } : {}) } : null;
     // 고치기 + 앱이 쪽 그림을 골라 보낸 때(pagesKept): 받지 않은 쪽 번호에 빈 자리 그림(1×1)을 둠. 사이트가 모든 쪽을 가리켜도(data-pages="1-300"·스크립트가 만든 주소)
     // 이 폴더의 확인(check)이 '쪽 그림이 없어요'·깨진 그림으로 알리지 않고, 에이전트가 그것을 고치려고 쪽을 줄이지 않게. 결과를 모으기 전에 지움(아래 dropHoles) — 앱에는 진짜 그림이 그대로 있음
-    const holeNums = []; if (job.kind === 'edit' && inp.pagesKept && shots.length) { const have = new Set(shots.map((x) => x.n)); for (let n = 1; n <= inp.pagesKept; n++) if (!have.has(n)) holeNums.push(n); }
+    const holeNums = []; if (inp.pagesKept && shots.length && (job.kind === 'edit' || appImages)) { const have = new Set(shots.map((x) => x.n)); for (let n = 1; n <= inp.pagesKept; n++) if (!have.has(n)) holeNums.push(n); }
     const files = Array.isArray(prep?.files) ? prep.files : [];
     const noImages = pageImages ? files.filter((f) => !f.twin && f.pages > 0 && !f.images && (!appImages || (setsOut.length > 1 ? !setsOut.some((x) => stemOf(x.owner) === stemOf(f.name)) : owner && stemOf(f.name) !== stemOf(owner)))).map((f) => f.name) : [];
     const pdfText = files.filter((f) => f.text).map((f) => f.name);
@@ -1114,7 +1131,18 @@ async function runJob(S, job) {
     const library = existsSync(join(REF, 'design-library.md')); // 디자인 서재(필요하면 참고, 따를 의무 없음)
     if (library) copyFileSync(join(REF, 'design-library.md'), join(ws, 'design-library.md'));
     writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), standIns: inp.materials.filter((m) => m.standsFor).map((m) => ({ name: m.name, for: m.standsFor })), photos: inp.photos.map((p) => p.name), pageImages, noImages, unread: lost.map((u) => u.name), md: md && (!prep || files.some((f) => f.type !== 'pdf' && f.pages > 0)), links, pdfText, pdfTextMb: PDF_WHOLE_MB, request: inp.request, reference: inp.reference, target: inp.target, library, kept: inp.pagesKept || 0, holes: holeNums.length > 0 }));
-    if (holeNums.length) { const ext = extname(shots[0].name) || '.webp'; for (const n of holeNums) { const f = join(work, 'site', 'material', `p-${String(n).padStart(3, '0')}${ext}`); writeFileSync(f, HOLE_IMAGE); (job.holes ||= []).push(f); } }
+    if (holeNums.length) {
+      // 가장 가까운 번호의 진짜 쪽과 같은 비율(여러 교재가 섞여 비율이 달라도 그 교재의 것에 가깝게). 이름의 끝은 받은 그림과 같게(내용은 PNG — 브라우저와 조립은 내용으로 읽음)
+      const { imageSize } = await imp('src/kit/assemble.js');
+      const ext = extname(shots[0].name) || '.webp', made = new Map(); job.holeShas = new Set();
+      const sizeOf = (sh) => { if (!sh.size) { try { sh.size = imageSize(new Uint8Array(readFileSync(join(work, 'site', 'material', sh.name)))) || { w: 16, h: 9 }; } catch { sh.size = { w: 16, h: 9 }; } } return sh.size; };
+      for (const n of holeNums) {
+        const near = shots.reduce((a, x) => (Math.abs(x.n - n) < Math.abs(a.n - n) ? x : a), shots[0]); const z = sizeOf(near);
+        const h = Math.max(1, Math.min(640, Math.round(160 * z.h / Math.max(1, z.w)))), key = `160x${h}`;
+        if (!made.has(key)) { const img = holeImage(160, h); made.set(key, img); job.holeShas.add(sha256(img)); }
+        const f = join(work, 'site', 'material', `p-${String(n).padStart(3, '0')}${ext}`); writeFileSync(f, made.get(key)); (job.holes ||= []).push(f);
+      }
+    }
     const extra = process.env.LECPAGE_STUDIO_SHOTS === '0' ? ['--no-shots'] : [];
     writeFileSync(join(bin, 'check.mjs'), `// lecpage 커넥트가 만든 검수 실행기(작업 폴더 밖이라 에이전트가 고칠 수 없어요)\nimport { pathToFileURL } from 'node:url';\nprocess.argv = [process.argv[0], ${JSON.stringify(CLI)}, 'check', ${JSON.stringify(work)}, ...${JSON.stringify(extra)}];\nawait import(pathToFileURL(${JSON.stringify(CLI)}).href);\n`);
     if (stopped()) return;
@@ -1148,6 +1176,7 @@ async function runJob(S, job) {
     else if (cj?.error) issues = [{ id: 'check-failed', level: 'error', where: { file: '', selector: '', section: '' }, message_ko: cj.error, fix_hint_ko: '' }];
     dropHoles(job);
     const { site, dropped } = readSiteDir(join(work, 'site'), siteFileOk);
+    dropHoleCopies(site, job); // 빈 자리 그림을 다른 이름으로 옮겨 둔 것(우리가 둔 것이라 '뺐어요'로 알리지 않음)
     // 비밀처럼 보이는 글(키·토큰·이 PC의 경로)이 있으면 받지 않음: 앱 미리보기를 거쳐 배포되면 누구나 보게 됨
     const leaks = secretShapes(site, { ws: root });
     const known = new Set([...inp.materials, ...inp.photos].map((m) => sha256(m.bytes)));
