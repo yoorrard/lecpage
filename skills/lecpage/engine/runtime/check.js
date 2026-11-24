@@ -132,7 +132,9 @@
   if (doc.body && doc.body.getAttribute('data-lp-preview') === '1') {
     verdict.setAttribute('data-state', 'wait'); big.textContent = '미리보기에서는 확인하지 않아요';
     sub.textContent = '접속 확인은 배포한 사이트에서 해요. 배포한 뒤 그 주소에서 이 화면을 열어 주세요.';
-    if (run) run.disabled = true;
+    // 결과 칸(되는 것·안 되는 것·할 일)과 단추는 숨김: '확인하는 중…'이 남아 있으면 아직 재는 것처럼 읽힘
+    [run, cp].forEach(function (b) { if (b) b.style.display = 'none'; });
+    Array.prototype.forEach.call(doc.querySelectorAll('[data-col]'), function (c) { c.style.display = 'none'; });
     return;
   }
   go();

@@ -522,7 +522,7 @@ function Undeploy({ p, target, info, records, done, onClose }) {
         else await undeployGitHub({ token, repo: d.github?.repo || '' });
       }
       done('', { target, [DEPLOY_KEY[target] || target]: null, ...(lec ? { lecpageTry: null } : {}) }, more);
-      toast(gone ? '이미 내려간 사이트예요. 배포한 곳 목록에서 삭제했어요.' : manual || listOnly ? '배포한 곳 목록에서 삭제했어요.' : '배포를 취소했어요. 이 주소는 더 열리지 않아요.');
+      toast(gone ? '이미 내려간 사이트예요. 배포한 곳 목록에서 삭제했어요.' : manual || listOnly ? '배포한 곳 목록에서 삭제했어요.' : '배포를 취소했어요. 이 주소는 몇 초 안에 닫혀요.');
       onClose();
     } catch (e) {
       try { console.warn('[lecpage] 배포 취소 실패', { target, status: e.status ?? '', code: e.code || '' }); } catch { /* 기록만 */ }

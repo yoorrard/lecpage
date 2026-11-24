@@ -104,6 +104,7 @@ test('접속 확인: 앱의 미리보기(출처 없는 틀)에서는 재지 않�
   const at = js.indexOf("getAttribute('data-lp-preview') === '1'"); const run = js.lastIndexOf('\n  go();');
   assert.ok(at > 0 && run > at, '미리보기 표시를 먼저 보고 그다음에 확인을 시작');
   assert.match(js.slice(at, run), /미리보기에서는 확인하지 않아요[\s\S]*배포한 사이트에서 해요[\s\S]*return;/);
+  assert.match(js.slice(at, run), /\[run, cp\]\.forEach[\s\S]*querySelectorAll\('\[data-col\]'\)/, '재는 중처럼 보이는 칸·단추를 숨김');
 });
 test('키트 CSS: 강조색 위 글자는 강조색 밝기로(상대 색), --lp-on-accent로 정할 수 있고, 옛 브라우저는 조립 값', () => {
   const css = fs.readFileSync(path.join(SKILL, 'engine', 'runtime', 'kit.css'), 'utf8');
