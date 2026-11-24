@@ -34,12 +34,28 @@
     toastTimer = setTimeout(function () { t.classList.remove('is-on'); }, 2400);
   }
   function el(tag, cls, text) { var n = doc.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; }
+  // 예전 방식 복사: 안전하지 않은 주소(http로 여는 내부망 서버·교실 LAN)에는 navigator.clipboard가 없고, 앱 안 브라우저는 거절하기도 함.
+  // 보이지 않는 글 상자를 잠깐 두고 복사한 뒤 초점을 제자리로(열린 대화 창이 있으면 그 안에 둠 — 창 밖은 고를 수 없음)
+  function legacyCopy(text) {
+    var prev = doc.activeElement, ds = doc.querySelectorAll('dialog[open]'), host = ds.length ? ds[ds.length - 1] : doc.body, ok = false;
+    if (!host || !doc.execCommand) return false;
+    var ta = doc.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.setAttribute('aria-hidden', 'true'); ta.tabIndex = -1;
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;font-size:16px';
+    try { host.appendChild(ta); ta.focus({ preventScroll: true }); ta.select(); ta.setSelectionRange(0, ta.value.length); ok = doc.execCommand('copy'); } catch (e) { ok = false; }
+    try { ta.remove(); if (prev && prev.focus) prev.focus({ preventScroll: true }); } catch (e) { }
+    return !!ok;
+  }
   function copyText(text, okMsg, fallbackEl) {
-    function fb() { if (fallbackEl && fallbackEl.select) { fallbackEl.focus(); fallbackEl.select(); toast('글자를 선택했어요. Ctrl+C로 복사해 주세요.'); } else toast('복사하지 못했어요. 직접 선택해 복사해 주세요.'); }
+    function fb() {
+      if (legacyCopy(String(text == null ? '' : text))) { toast(okMsg || '복사했어요.'); return true; }
+      if (fallbackEl && fallbackEl.select) { fallbackEl.focus(); fallbackEl.select(); toast('글자를 선택했어요. Ctrl+C로 복사해 주세요.'); } else toast('복사하지 못했어요. 직접 선택해 복사해 주세요.');
+      return false;
+    }
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function () { toast(okMsg || '복사했어요.'); return true; }, function () { fb(); return false; });
+      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function () { toast(okMsg || '복사했어요.'); return true; }, function () { return fb(); });
     } catch (e) { }
-    fb(); return Promise.resolve(false);
+    return Promise.resolve(fb());
   }
   // 카카오톡·네이버 앱 등 안의 브라우저는 파일 내려받기를 막음(눌러도 아무 일 없음) → 기록을 복사해 줌
   var IN_APP = /KAKAOTALK|NAVER\(inapp|Instagram|FBAN|FBAV|\bLine\//i.test(navigator.userAgent || '');

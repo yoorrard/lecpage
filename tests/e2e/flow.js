@@ -110,6 +110,8 @@ const noScroll = async (p, where) => L.ok(`${where}: no horizontal page scroll`,
   L.ok('preview: poster page', /우리 반 데이터 연수/.test(await frame.locator('body').innerText()));
   await p.screenshot({ path: L.OUT + `${tag}-09-poster.png` });
   await p.selectOption('.pv-page select', 'index.html');
+  // 운영 주소로 돌릴 때(E2E_REMOTE=1)는 배포 앞에서 끝냄: 운영에는 바로 배포가 기본이라 가짜 Vercel 대신 실제 사이트가 만들어질 수 있음
+  if (process.env.E2E_NO_DEPLOY === '1') { L.ok('no page errors (before deploy)', errs.length === 0, JSON.stringify(errs)); await b.close(); process.exit(L.summary() ? 1 : 0); }
   // ⑤ 배포(가짜 Vercel)
   await p.click('.head-tools button:has-text("배포하기")');
   await p.waitForSelector('.publish', { timeout: 20000 });

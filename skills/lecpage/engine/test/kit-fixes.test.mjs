@@ -523,6 +523,25 @@ test('브라우저: 암호로 잠근 사이트를 파일로 열면 — 암호는
   });
 });
 
+// http로 여는 곳(내부망 서버·교실 LAN)에는 navigator.clipboard가 없어 [복사]가 '복사하지 못했어요'로 끝났음(실습 프롬프트 복사가 안 됨) → 예전 방식으로 복사
+test('브라우저: 클립보드 API가 없는 주소(http 내부망)에서도 [복사]가 됨 — 예전 방식으로 복사하고 초점은 누른 단추에 그대로', { skip, timeout: 120000 }, async () => {
+  const site = { 'index.html': PAGE('<section><h2>실습</h2><button id="cp" type="button" data-copy-text="복사할 원문 한 줄">프롬프트 복사</button></section>') };
+  const r = K.assemble(site, META, { runtime: rt });
+  await withSite(r.files, async (page, base) => {
+    const errs = []; page.on('pageerror', (e) => errs.push(String(e)));
+    await page.addInitScript(() => { try { Object.defineProperty(Navigator.prototype, 'clipboard', { get() { return undefined; }, configurable: true }); } catch (e) { } window.__copied = []; document.addEventListener('copy', () => { const a = document.activeElement; window.__copied.push(a && 'value' in a ? a.value : ''); }, true); });
+    await page.goto(base); await page.waitForSelector('[data-toast]', { state: 'attached' }); await page.waitForTimeout(800);
+    assert.equal(await page.evaluate(() => typeof navigator.clipboard), 'undefined', '클립보드 API가 없는 상태');
+    await page.click('#cp'); await page.waitForTimeout(600);
+    const s = await page.evaluate(() => ({ copied: window.__copied, toast: (document.querySelector('[data-toast]') || {}).textContent || '', focus: document.activeElement && document.activeElement.id, left: document.querySelectorAll('textarea[aria-hidden="true"]').length }));
+    assert.deepEqual(s.copied, ['복사할 원문 한 줄'], '원문이 복사됨: ' + JSON.stringify(s));
+    assert.match(s.toast, /복사했어요/, '복사했다고 알림: ' + s.toast);
+    assert.equal(s.focus, 'cp', '초점은 누른 단추에');
+    assert.equal(s.left, 0, '잠깐 둔 글 상자는 남지 않음');
+    assert.deepEqual(errs, [], '쪽 오류 없음');
+  });
+});
+
 // 떠 있는 도크(도움 요청·질문)가 화면을 꽉 채운 첫 화면의 아래쪽 단추를 덮던 것(실제 AI 사이트 넷 중 둘): 처음 내릴 때까지 감춤
 const BARE = (body) => PAGE(body).replace('<h1>시험 연수</h1>', ''); // 첫 화면이 화면 맨 위에서 시작하게(PAGE는 앞에 제목 한 줄을 둠)
 const HERO = (cta) => BARE(`<header id="hero" style="min-height:100vh;display:flex;flex-direction:column;justify-content:${cta ? 'flex-end' : 'flex-start'};padding:24px 16px 20px;box-sizing:border-box"><h1>첫 화면</h1><a id="cta" href="#qa" style="display:block;padding:16px;text-align:center;background:#222;color:#fff">출석하고 시작하기</a></header><section id="qa" style="min-height:130vh"><h2>질문</h2><div data-lp="qa"></div></section>`);
