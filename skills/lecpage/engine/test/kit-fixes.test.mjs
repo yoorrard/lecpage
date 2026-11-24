@@ -525,7 +525,9 @@ test('브라우저: 암호로 잠근 사이트를 파일로 열면 — 암호는
 
 // http로 여는 곳(내부망 서버·교실 LAN)에는 navigator.clipboard가 없어 [복사]가 '복사하지 못했어요'로 끝났음(실습 프롬프트 복사가 안 됨) → 예전 방식으로 복사
 test('브라우저: 클립보드 API가 없는 주소(http 내부망)에서도 [복사]가 됨 — 예전 방식으로 복사하고 초점은 누른 단추에 그대로', { skip, timeout: 120000 }, async () => {
-  const site = { 'index.html': PAGE('<section><h2>실습</h2><button id="cp" type="button" data-copy-text="복사할 원문 한 줄">프롬프트 복사</button></section>') };
+  // 감춰 둔 채 열려 있는 창(사이트가 만든 것)과 모달 창 안의 단추도 함께: 글 상자는 고를 수 있는 곳에 둬야 복사됨
+  const site = { 'index.html': PAGE('<section><h2>실습</h2><button id="cp" type="button" data-copy-text="복사할 원문 한 줄">프롬프트 복사</button></section>'
+    + '<dialog id="dlg"><button id="cp2" type="button" data-copy-text="창 안의 원문">창 안에서 복사</button></dialog><dialog id="ghost" open style="display:none"><p>감춘 창</p></dialog>') };
   const r = K.assemble(site, META, { runtime: rt });
   await withSite(r.files, async (page, base) => {
     const errs = []; page.on('pageerror', (e) => errs.push(String(e)));
@@ -538,6 +540,17 @@ test('브라우저: 클립보드 API가 없는 주소(http 내부망)에서도 [
     assert.match(s.toast, /복사했어요/, '복사했다고 알림: ' + s.toast);
     assert.equal(s.focus, 'cp', '초점은 누른 단추에');
     assert.equal(s.left, 0, '잠깐 둔 글 상자는 남지 않음');
+    // 모달 창 안의 단추: 창 밖에 둔 글 상자는 고를 수 없으니 그 창 안에 두고 복사
+    await page.evaluate(() => { window.__copied = []; document.getElementById('dlg').showModal(); });
+    await page.click('#cp2'); await page.waitForTimeout(600);
+    const m = await page.evaluate(() => ({ copied: window.__copied, toast: (document.querySelector('[data-toast]') || {}).textContent || '', left: document.querySelectorAll('textarea[aria-hidden="true"]').length }));
+    assert.deepEqual(m.copied, ['창 안의 원문'], '모달 창 안에서도 복사됨: ' + JSON.stringify(m));
+    assert.equal(m.left, 0);
+    // 초점·선택이 잡히지 않으면(고를 수 없는 곳) 복사했다고 하지 않음 — execCommand는 그때도 참을 돌려줘 '복사했어요'가 잘못 떴음
+    await page.evaluate(() => { document.getElementById('dlg').close(); window.__copied = []; const P = HTMLTextAreaElement.prototype; P.focus = P.select = P.setSelectionRange = function () { }; });
+    await page.click('#cp'); await page.waitForTimeout(600);
+    const f = await page.evaluate(() => ({ copied: window.__copied, toast: (document.querySelector('[data-toast]') || {}).textContent || '' }));
+    assert.match(f.toast, /복사하지 못했어요/, '고르지 못했으면 복사했다고 알리지 않음: ' + JSON.stringify(f));
     assert.deepEqual(errs, [], '쪽 오류 없음');
   });
 });

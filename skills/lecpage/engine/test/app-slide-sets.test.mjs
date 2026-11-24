@@ -203,6 +203,12 @@ test('쪽 이름은 묶음 번호에 맞춤: 먼저 읽힌 교재가 뒤 묶음�
   assert.deepEqual(SS.pagesBySets(hid, [{ name: 'workshop.pptx', first: 1, count: 7 }]), []);
   assert.deepEqual(SS.pagesBySets(hid, [{ name: 'other.pdf', first: 1, count: 2 }]), []);
   assert.deepEqual(SS.pagesBySets(hid, [{ name: 'workshop.pdf', first: 1, count: 2 }]).map((r) => r.page), [1, 2]);
+  // 다른 교재를 그린 PDF(renderOf)의 묶음: 쪽 이름은 그 원본 교재의 것(이름이 달라도, 같은 이름의 문서형 교재가 더 있어도)
+  const twin = { files: [{ id: 'deck1', name: 'deck.pptx', unit: 'slide' }, { id: 'pdf1', name: 'deck_handout.pdf', unit: 'page', renderOf: 'deck1' }], pages: [pg('deck1', 1, '가'), pg('deck1', 2, '나')] };
+  assert.deepEqual(SS.pagesBySets(twin, [{ name: 'deck_handout.pdf', first: 1, count: 2 }, { name: 'deck.pptx', first: 3, count: 2 }]).map((r) => [r.page, r.title]), [[1, '가'], [2, '나'], [3, '가'], [4, '나']]);
+  const three = { files: [{ id: 'd1', name: 'x.pptx', unit: 'slide' }, { id: 'p1', name: 'x.pdf', unit: 'page', renderOf: 'd1' }, { id: 'w1', name: 'x.docx', unit: 'section' }], pages: [pg('d1', 1, '가'), pg('d1', 2, '나'), pg('w1', 1, '문서')] };
+  assert.deepEqual(SS.pagesBySets(three, [{ name: 'x.pdf', first: 1, count: 2 }]).map((r) => [r.page, r.title]), [[1, '가'], [2, '나']]);
+  assert.deepEqual(SS.pagesBySets(three, [{ name: 'x.ppt', first: 1, count: 2 }]), [], '확장자만 다른 짝이 서로 다른 교재를 가리키면(슬라이드와 문서) 비움');
   // 묶음이 없으면(예전 연수) null → 부른 쪽이 예전 규칙을 씀
   assert.equal(SS.pagesBySets(material, []), null);
 });

@@ -35,16 +35,26 @@
   }
   function el(tag, cls, text) { var n = doc.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; }
   // 예전 방식 복사: 안전하지 않은 주소(http로 여는 내부망 서버·교실 LAN)에는 navigator.clipboard가 없고, 앱 안 브라우저는 거절하기도 함.
-  // 보이지 않는 글 상자를 잠깐 두고 복사한 뒤 초점을 제자리로(열린 대화 창이 있으면 그 안에 둠 — 창 밖은 고를 수 없음)
+  // 보이지 않는 글 상자를 잠깐 두고 복사한 뒤 초점을 제자리로. 글 상자는 고를 수 있는 곳에 둬야 함(모달 창이 떠 있으면 그 밖은 고를 수 없음):
+  // 누른 단추가 든 대화 창 → 열린 대화 창들 → 쪽 차례로 해 보고, 초점과 선택이 실제로 잡힌 곳에서만 복사했다고 봄
+  // (잡히지 않아도 execCommand는 참을 돌려줘, 감춰 둔 창·겹친 창에서 복사가 안 됐는데 '복사했어요'가 떴음)
   function legacyCopy(text) {
-    var prev = doc.activeElement, ds = doc.querySelectorAll('dialog[open]'), host = ds.length ? ds[ds.length - 1] : doc.body, ok = false;
-    if (!host || !doc.execCommand) return false;
-    var ta = doc.createElement('textarea');
-    ta.value = text; ta.setAttribute('readonly', ''); ta.setAttribute('aria-hidden', 'true'); ta.tabIndex = -1;
-    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;font-size:16px';
-    try { host.appendChild(ta); ta.focus({ preventScroll: true }); ta.select(); ta.setSelectionRange(0, ta.value.length); ok = doc.execCommand('copy'); } catch (e) { ok = false; }
-    try { ta.remove(); if (prev && prev.focus) prev.focus({ preventScroll: true }); } catch (e) { }
-    return !!ok;
+    if (!doc.execCommand || !doc.body) return false;
+    var prev = doc.activeElement, ds = doc.querySelectorAll('dialog[open]'), own = prev && prev.closest ? prev.closest('dialog[open]') : null, hosts = own ? [own] : [], ok = false, i;
+    for (i = ds.length - 1; i >= 0; i--) if (hosts.indexOf(ds[i]) < 0) hosts.push(ds[i]);
+    hosts.push(doc.body);
+    for (i = 0; i < hosts.length && !ok; i++) {
+      var ta = doc.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.setAttribute('aria-hidden', 'true'); ta.tabIndex = -1;
+      ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;font-size:16px;-webkit-user-select:text;user-select:text';
+      try {
+        hosts[i].appendChild(ta); ta.focus({ preventScroll: true }); ta.select(); ta.setSelectionRange(0, ta.value.length);
+        ok = doc.activeElement === ta && ta.selectionStart === 0 && ta.selectionEnd === ta.value.length && !!doc.execCommand('copy');
+      } catch (e) { ok = false; }
+      try { ta.remove(); } catch (e) { }
+    }
+    try { if (prev && prev.focus) prev.focus({ preventScroll: true }); } catch (e) { }
+    return ok;
   }
   function copyText(text, okMsg, fallbackEl) {
     function fb() {

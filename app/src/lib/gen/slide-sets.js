@@ -50,12 +50,15 @@ export function setFor(sets, name) {
  */
 export function pagesBySets(material, sets) {
   const list = normSets(sets); if (!list.length) return null;
-  const files = (material?.files || []).filter((f) => f && !f.renderOf);
+  const files = (material?.files || []).filter(Boolean);
   const text = (p) => (p.paragraphs || []).map((x) => x.text).join(' ').slice(0, 400);
+  // 다른 교재를 그린 PDF(renderOf: 이 PC에서 만든 PDF·함께 넣은 같은 내용의 PDF)의 묶음이면 쪽 이름은 그 원본 교재의 것
+  const src = (f) => (f && f.renderOf ? files.find((x) => x.id === f.renderOf) || null : f);
   const out = [];
   for (const s of list) {
-    const same = files.filter((f) => stemOf(f.name) === stemOf(s.name));
-    const f = files.find((x) => x.name === s.name) || (same.length === 1 ? same[0] : null);
+    const exact = files.find((x) => x.name === s.name);
+    const owners = [...new Set((exact ? [exact] : files.filter((x) => stemOf(x.name) === stemOf(s.name))).map(src).filter(Boolean))];
+    const f = owners.length === 1 ? owners[0] : null; // 이름이 같거나, 확장자만 다른 짝이 한 교재를 가리킬 때만
     if (!f || f.unit === 'section') continue;
     const all = (material.pages || []).filter((p) => p.file === f.id).sort((a, b) => a.page - b.page);
     const vis = all.filter((p) => !p.hidden);

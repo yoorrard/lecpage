@@ -120,7 +120,7 @@ export function Project({ id, step }) {
   const askSave = () => (p.deploy?.lastUrl ? (setWithKeys(false), setSaveAsk(true)) : saveProjectFile());
   // stale: 다른 탭에서 이 연수를 고쳐 이 탭이 저장을 멈춤(빨간 띠) — 배포하기 화면이 그동안 배포를 받지 않음
   // stopped·storeNow: 배포가 도는 사이 다른 탭이 저장해 이 탭의 저장이 멈췄을 때, 배포 결과(주소·수정 키)만은 저장소의 지금 판에 바로 얹음(Share.jsx done)
-  const ctx = { p, update, go, job, idle: () => saver.idle(), reload: () => load({ keep: true }), stale: st.s === 'changed', stopped: () => saver.stopped(), storeNow: (fn) => projects.patch(id, fn) };
+  const ctx = { p, update, go, job, idle: () => saver.idle(), settle: () => saver.idle(60000), reload: () => load({ keep: true }), stale: st.s === 'changed', stopped: () => saver.stopped(), storeNow: (fn) => projects.patch(id, fn) };
   return (
     <div class={`wiz stage-${s}${wide ? " is-studio" : ""}`}>
       {p.demo && <DemoBar pid={id} />}

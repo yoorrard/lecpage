@@ -141,7 +141,7 @@ function coverOf(p, pageNums) {
  */
 const hostFileLimit = (to) => { const l = E.HOSTS[to]?.limit; const mb = l?.fileMB || l?.siteMB; return mb ? { maxFileBytes: mb * 1024 * 1024 } : null; };
 
-export function StepShare({ p, update, go, stale, stopped, storeNow, idle }) {
+export function StepShare({ p, update, go, stale, stopped, storeNow, idle, settle }) {
   const bp = deployView(p);
   const [busy, setBusy] = useState('');
   const [prog, setProg] = useState(null);
@@ -150,8 +150,10 @@ export function StepShare({ p, update, go, stale, stopped, storeNow, idle }) {
   const [autoLive, setAutoLive] = useState(false); // 운영자의 바로 배포 서버가 참여 기능까지 맡는지
   const [target, setTarget] = useState(''); // 지금 고른 배포할 곳(Publish가 알려 줌)
   const [skipLive, setSkipLive] = useState(false); // 이번에는 참여 기능 없이 배포하기
-  // 저장이 멈춘 동안은 배포 칸을 통째로 잠금(아래 fieldset) — 그때 그 안에 열려 있던 대화 창은 잠긴 채 화면을 막으니(닫기도, 빨간 띠의 [다시 불러오기]도 못 누름) 닫아 둠
-  useEffect(() => { if (stale) for (const d of document.querySelectorAll('fieldset.plain-fieldset dialog[open]')) { try { d.close(); } catch { /* 이미 닫힘 */ } } }, [stale]);
+  // 저장이 멈춘 동안은 배포 칸을 통째로 잠금(아래 fieldset) — 그때 그 안에 열려 있던 대화 창은 잠긴 채 화면을 막으니(닫기도, 빨간 띠의 [다시 불러오기]도 못 누름) 닫아 둠.
+  // 도는 일(배포·배포 취소)이 있는 동안은 잠그지 않음: 그 창을 닫으면 진행·묻는 칸·실패 까닭이 안 보이고 창을 다시 열 수도 없었음. 일이 끝나면 잠그고 닫음(새 배포는 guard가 막음)
+  const locked = !!stale && !busy;
+  useEffect(() => { if (locked) for (const d of document.querySelectorAll('fieldset.plain-fieldset dialog[open]')) { try { d.close(); } catch { /* 이미 닫힘 */ } } }, [locked]);
   const [open, setOpen] = useState({}); // 체크리스트에서 [바꾸기]로 펼친 줄
   const [fontNote, setFontNote] = useState(''); // 글꼴을 사이트에 담지 못했을 때 한 줄
   const [info, setInfoSrv] = useState(null); // 바로 배포 서버의 /api/info(보관 기간·하루 한도)
@@ -375,7 +377,8 @@ export function StepShare({ p, update, go, stale, stopped, storeNow, idle }) {
     // 그때는 결과만 저장소의 지금 판(다른 탭이 고친 것) 위에 바로 얹음: 다른 탭의 고친 내용도, 이 배포 기록도 남음
     // (다른 탭에서 연수를 지웠으면 얹을 곳이 없어 아무것도 하지 않음. 충돌을 위 저장을 쓰다가 알게 되는 때도 있어 다 쓴 뒤에 한 번 더 봄 — 같은 결과를 두 번 얹어도 값이 같음)
     const keep = () => { if (stopped?.() === 'changed' && storeNow) storeNow(result).then((saved) => { if (saved) toast('배포 기록을 저장했어요. 다른 탭에서 고친 내용은 [이 탭으로 다시 불러오기]로 이어서 봐요.'); }, () => { }); };
-    if (stopped?.() === 'changed') keep(); else if (idle) idle().then(keep, () => { });
+    // settle: 큰 연수·느린 기기는 저장이 몇 초 넘게 걸림 — 3초만 기다리는 idle로는 저장이 끝나기 전에 보고 지나쳐 기록을 잃었음
+    if (stopped?.() === 'changed') keep(); else if (settle || idle) (settle || idle)().then(keep, () => { });
   }
   /** 참가자에게 알릴 대표 주소를 배포한 곳 가운데에서 바꿈: 완료 카드·QR·강사 화면·QR 안내문이 이 주소를 따름 */
   function setPrimary(t, sure = false) {
@@ -518,7 +521,7 @@ export function StepShare({ p, update, go, stale, stopped, storeNow, idle }) {
       </StepHead>
       {/* 다른 탭에서 이 연수를 고쳐 이 탭이 저장을 멈춘 동안: 이 화면의 단추를 모두 잠금(배포·배포 취소·주소 저장의 결과를 적지 못함). 누를 곳은 위 빨간 띠의 [이 탭으로 다시 불러오기] 하나 */}
       {stale && <p class="small warn-line" role="status" data-stale-note>다른 탭에서 이 연수를 고쳤어요. [이 탭으로 다시 불러오기]를 누르면 여기서 이어서 배포할 수 있어요.</p>}
-      <fieldset class="plain-fieldset" disabled={!!stale} inert={!!stale}>{/* inert: 단추처럼 보이는 링크(새 구글 시트 열기 등)도 함께 잠금 */}
+      <fieldset class="plain-fieldset" disabled={locked} inert={locked}>{/* inert: 단추처럼 보이는 링크(새 구글 시트 열기 등)도 함께 잠금 */}
       {p.demo && <DemoPublish p={p} buildFiles={buildFiles} />}
       {p.deploy?.lastUrl && <Success p={p} bp={bp} update={update} onEdit={() => go(2)} onRepublish={republish} onPrimary={setPrimary} busy={busy} onZip={(x) => guard((o) => zip(x && x.plain === true ? { ...o, plain: true } : o), false, 'zip')} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} exp={exp} days={info?.limits?.days} />}
 

@@ -70,10 +70,11 @@ export function makeSaver(id, base, onState) {
     reset(b) { base = b; stop = ''; failed = false; latest = null; dirty = false; clearTimeout(timer); timer = 0; },
     base: () => base,
     stopped: () => stop,
-    /** 기다리는 것을 다 쓸 때까지(생성 쪽이 저장소에서 이 연수를 읽기 전에) */
-    async idle() {
+    /** 기다리는 것을 다 쓸 때까지(생성 쪽이 저장소에서 이 연수를 읽기 전에). maxMs: 기다릴 한도(기본 3초, 배포 기록처럼 꼭 결과를 봐야 할 때는 길게) */
+    async idle(maxMs = 3000) {
       if (timer) { clearTimeout(timer); run(); }
-      for (let i = 0; i < 100 && (busy || timer || (latest && !stop && !failed)); i++) await new Promise((r) => setTimeout(r, 30));
+      const max = Math.max(1, Math.ceil((maxMs > 0 ? maxMs : 3000) / 30));
+      for (let i = 0; i < max && (busy || timer || (latest && !stop && !failed)); i++) await new Promise((r) => setTimeout(r, 30));
     },
   };
 }
