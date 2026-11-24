@@ -12,26 +12,27 @@
 | `work/lecpage.json` | 에이전트 | 연수 정보·참여 기능·색(`references/kit.md`) | 조립에 씀 |
 | `work/lecpage.teacher.json` | 강사 값 | `live`·`siteUrl`·`joinUrl`·`shortUrl`·`access`·`surveyUrl`·`privacy`·`keepUntil`. 강사가 알려 준 값만. `publish --live`가 `live`를 적음 | 조립에 씀 |
 | `work/material.md` | prepare | PDF가 아닌 교재(PPTX·HWP·HWPX·DOCX)에서 코드가 뽑은 쪽마다 글자·발표자 노트. 쪽 그림과 다르면 쪽 그림이 맞음(PDF는 원본을 직접 읽어 두지 않음) | 안 올림 |
+| `work/links.md` | prepare | 글자·단추·그림에 걸려 있어 쪽 그림과 PDF 원본에서는 주소가 보이지 않는 링크(교재 파일에 적힌 그대로, PDF 교재도). 그런 링크가 있을 때만 생김 | 안 올림 |
 | `work/README.md` | prepare | 이 작업의 경로 요약(교재 원본·쪽 범위·키트 설명서·확인 명령) | 안 올림 |
-| `work/dist/` | check·preview·publish | 조립 결과(참가자 사이트 + 강사 화면·발표 화면·안내문·접속 확인·개인정보 안내·`_headers`) | **이것을 올림** |
+| `work/dist/` | check·preview·pack·publish | 조립 결과(참가자 사이트 + 강사 화면·발표 화면·안내문·접속 확인·개인정보 안내·`_headers`). 공개 범위가 암호(`access: "password"`)면 `pack`·`publish`가 암호를 받아 잠근 것만 여기에 둠 | **이것을 올림** |
 | `work/dist-강사용/` | 조립·publish | `운영안내.md`, `publish --live` 뒤 `관리자-키.txt`(본인만 읽기), `QR-안내문.pdf`·`발표화면.png` | **안 올림** |
 | `work/check/` | check | `issues.md`(고칠 곳, AI가 읽기 좋은 꼴)·`report.json`·`<쪽>-390.png`·`-1280.png` | 안 올림 |
-| `work/.lecpage/` | prepare | 교재에서 뽑은 쪽 제목(`pages.json`, 고칠 때는 `lecpage.json`의 `pages`)·교재 목록(`sources.json`) | 안 올림 |
+| `work/.lecpage/` | prepare·check·serve | 교재에서 뽑은 쪽 제목(`pages.json`, 고칠 때는 `lecpage.json`의 `pages`)·교재 목록(`sources.json`). 공개 범위가 암호일 때 `check`·`preview`가 살펴보는 잠그기 전 사이트(`check-site/`), `serve --live`의 교실용 사이트(`live-site/`) | 안 올림 |
 | `work/lecpage.state.json` | CLI | 마지막으로 올린 곳(이름·주소, 비밀 값 없음) | 안 올림 |
 | `work/live-relay/` | publish --live | 참여 기능 중계(backends/cloudflare 사본, 이 연수 코드만 받음) | 강사 Cloudflare에 |
 
 ## 2. 명령
 | 명령 | 하는 일 |
 |---|---|
-| `prepare <교재...> [-o work] [--no-slides]` | 교재(PDF·PPTX·HWP·HWPX·DOCX·https 주소)를 읽어 쪽 그림·빈 `lecpage.json`·`README.md`(PDF가 아닌 교재가 있으면 `material.md`도). PPTX와 같은 내용의 PDF를 함께 주면 쪽 그림이 원본 글꼴. 쪽 그림이 모자라면 `doctor`의 LibreOffice·pdftoppm. 100쪽이 넘으면 진행 줄이 stderr에 나옴(멈춘 것 아님) |
-| `check [work] [--no-shots] [--port 0]` | 조립(`work/dist`) → 정적 검수(HTML 구조·빈 칸·깨진 경로·키트 표시·금지 패턴·크기·글자 대비) → 그려서 검수(390·1280px: 가로 넘침·겹침·안 보이는 글·잘린 글·깨진 그림·작은 글자·작은 단추·스크립트 오류·CSP 막힘) → 화면 그림. 고칠 곳이 있으면 종료 코드 1 |
-| `preview [work] [--port 4173] [--host 0.0.0.0]` | 조립해서 띄움. 강사 화면(`console.html`)·발표 화면(`screen.html`)·QR 안내문(`poster.html`)도. 참여 기능은 연습 모드(같은 브라우저 안에서만 이어짐) |
+| `prepare <교재...> [-o work] [--no-slides]` | 교재(PDF·PPTX·HWP·HWPX·DOCX·https 주소)를 읽어 쪽 그림·빈 `lecpage.json`·`README.md`(PDF가 아닌 교재가 있으면 `material.md`, 주소가 보이지 않는 링크가 있으면 `links.md`도). 요약의 쪽 수는 사이트에 놓이는 쪽이에요: 슬라이드·PDF는 읽은 쪽, 워드·한글은 그 교재의 쪽 그림 수(제목으로 나눠 읽은 '부분'은 쪽으로 세지 않고, 쪽 그림이 없으면 '글로 읽은 교재 … N개 부분'으로 따로 알림). PPTX와 같은 내용의 PDF를 함께 주면 쪽 그림이 원본 글꼴. 쪽 그림이 모자라면 `doctor`의 LibreOffice·pdftoppm. 100쪽이 넘으면 진행 줄이 stderr에 나옴(멈춘 것 아님) |
+| `check [work] [--no-shots] [--no-tiles] [--port 0] [--host 배포할 곳]` | 조립(`work/dist`) → 정적 검수(HTML 구조·빈 칸·깨진 경로·키트 표시·금지 패턴·크기·글자 대비) → 그려서 검수(390·1280px: 가로 넘침·겹침·안 보이는 글·잘린 글·깨진 그림·작은 글자·작은 단추·스크립트 오류·CSP 막힘) → 화면 그림(`--no-shots`면 그리지 않고, `--no-tiles`면 나눠 본 그림만 뺌). 고칠 곳이 있으면 종료 코드 1. `--host`(cloudflare·vercel·github-pages·netlify·onpod·lan·zip …, 없으면 지난번 배포한 곳): 개인정보 안내·운영안내를 그 배포 방식에 맞게. 공개 범위가 암호여도 암호 없이 돼요(3절) |
+| `preview [work] [--port 4173] [--host 0.0.0.0] [--live]` | 조립해서 띄움. 강사 화면(`console.html`)·발표 화면(`screen.html`)·QR 안내문(`poster.html`)도. 참여 기능은 연습 모드(같은 브라우저 안에서만 이어짐). `--live`는 `serve work --live`와 같아요 |
 | `app [work] [-o 연수.lecpage]` | 앱으로 넘기기(.lecpage v2): 사이트 폴더·연수 정보·쪽 그림·쪽 제목·교재 원본(100MB까지). 참여 기능 키·관리자 키는 담지 않음. 강사가 https://lecpage.com/ [저장한 파일 열기]로 열어 미리보기·고치기·배포 |
 | `app 연수.lecpage [-o work] [--force]` | 반대로: 앱에서 저장한 파일을 작업 폴더로(사이트·`lecpage.json`·원본 `src/`). 파일 안의 강사 값은 `lecpage.teacher.from-file.json`에 따로 두니, 강사에게 확인받고 `lecpage.teacher.json`으로 옮김. 예전 방식(설계도)으로 만든 연수는 교재 쪽 그림·연수 정보·원본만 옮기니(`site/index.html`은 새로 써요) `prepare 원본 -o work`로 이어 가요 |
-| `studio [--port 6600] [--no-open] [--dist app/dist] [--remote] [--timeout 30]` | lecpage 커넥트(PC 프로그램): 앱을 `http://127.0.0.1:<포트>/`에서 열고, 앱이 이 PC에 설치·로그인된 Claude Code·Codex로 사이트를 만들게 함(그 사람의 구독 한도). 자세히 `references/studio.md` |
+| `connect [--port 6600] [--no-open] [--open lecpage\|local] [--autostart] [--new-token] [--dist app/dist] [--remote] [--timeout 30]` | lecpage 커넥트(PC 프로그램, `studio`는 예전 이름이고 같은 명령): 앱을 `http://127.0.0.1:<포트>/`에서 열고, 앱이 이 PC에 설치·로그인된 Claude Code·Codex로 사이트를 만들게 함(그 사람의 구독 한도). `--open local`: lecpage.com 대신 이 PC 주소를 엶 · `--autostart`: 컴퓨터를 켤 때 켜는 용도(브라우저를 열지 않음) · `--new-token`: 짝 맞춤 토큰을 새로(켜진 커넥트가 없을 때만). 자세히 `references/studio.md` |
 | `publish [work] [--host cloudflare\|onpod] [--live] [--name 이름] [--dry-run] [--temporary] [--no-handouts] [--no-bundle-fonts] [--password 암호]` | 조립(글꼴 CDN의 글꼴을 쓰인 글자만 사이트 안에 담음, 끄기 `--no-bundle-fonts` · `--password`면 쪽·교재 쪽 그림·자료실 파일을 암호로 잠금) → 강사 계정에 올리기 → 주소 확인 → 안내물. `--dry-run`은 순서와 **강사가 할 일**만 보여 줌. `--live`(Cloudflare): 중계 올리기 → 관리자 키를 중계 비밀로 넣고 `dist-강사용/관리자-키.txt`에만 → `lecpage.teacher.json`의 `live`에 중계 주소·연수 코드 → 다시 조립 → 올리기 → 중계가 이 사이트만 받게 → 확인. 인증은 `npx wrangler@4 login`이나 `CLOUDFLARE_API_TOKEN`(Onpod은 `ONPOD_TOKEN`) 환경 변수만. 다시 올릴 때는 `publish work`만(지난번 곳·주소) |
-| `handouts <배포한 주소\|work> [-o 폴더]` | `QR-안내문.pdf`(참가자용 A4)·`발표화면.png`·`발표화면-QR-크게.png`. 작업 폴더를 주면 로컬 주소라 QR이 다른 기기에서 안 열린다고 알림 |
-| `pack [work\|work/dist] -o site.zip [--bundle-fonts] [--password 암호]` | 조립한 사이트를 ZIP 하나로(USB·교실 LAN). 강사용 폴더는 담지 않음. 인터넷이 막힌 교실이면 `--bundle-fonts` |
+| `handouts <배포한 주소\|work> [-o 폴더] [--password 암호]` | 배포한 주소로 `QR-안내문.pdf`(참가자용 A4)·`발표화면.png`·`발표화면-QR-크게.png`. 작업 폴더를 주면 이 컴퓨터에서 띄워 만들어서, 강사 값 `siteUrl`이 없으면 QR이 그려지지 않아요(`QR-안내문.pdf`·`발표화면.png`만 나오고 '배포한 뒤 `handouts <배포한 주소>`로 다시'라고 알림) |
+| `pack [work\|work/dist] -o site.zip [--bundle-fonts] [--password 암호] [--host 배포할 곳]` | 조립한 사이트를 ZIP 하나로(USB·교실 LAN). 강사용 폴더는 담지 않음. 인터넷이 막힌 교실이면 `--bundle-fonts`. `--password`(또는 `LECPAGE_PASSWORD`): 쪽·교재 쪽 그림·자료실 파일을 암호로 잠금. `--host`: `check`와 같음 |
 | `serve [work\|폴더] [--port 4173] [--live]` | 작업 폴더면 `preview`와 같음, 다른 폴더는 그대로 띄움. `--live`(작업 폴더, 포트 기본 8787): 노트북이 참여 기능 서버(`backends/node-server`)까지 맡아 교실 와이파이의 여러 기기가 실제로 참여(QR은 와이파이 주소, 기록·관리자 키는 `dist-강사용/live-data/`, 올리는 `dist`는 그대로) |
 | `doctor` | 판·Node·Playwright·LibreOffice·pdftoppm·PDF 읽기·한글 글꼴 확인과 설치 명령(윈도우·macOS·리눅스) |
 | `decide-infra [-i 답.json] [--size 30] [--features qa,poll] [--skill set] [--network good\|restricted\|offline] [--minor]` | 배포할 곳 × 참여 기능 서버 추천(강사가 할 일 수로 고름). 이미 연결한 곳은 `-i`의 JSON에 `connected:["cloudflare"]` 등(`references/infra-decision.md`) |
@@ -45,7 +46,7 @@ AI가 정하지 않는 칸이에요. 강사가 알려 준 값만 적고, `lecpag
   "live": { "provider": "sheets", "url": "https://script.google.com/…", "code": "AB12CD" },
   "privacy": { "collect": ["nickname", "name", "school"], "retentionDays": 30 }, "keepUntil": "2026-12-31" }
 ```
-- `access`: `link`(기본, 주소를 받은 사람만·검색 제외) · `public`(검색 허용). 새 흐름은 아직 암호를 걸 수 없어요.
+- `access`: `link`(기본, 주소를 받은 사람만·검색 제외) · `public`(검색 허용) · `password`(암호를 아는 사람만: 쪽·교재 쪽 그림·자료실 파일을 잠그고 접속 확인·개인정보 안내만 열어 둠). 암호는 파일에 적지 않고 `pack`·`publish`에 `--password 암호`나 `LECPAGE_PASSWORD` 환경 변수로 줘요(없으면 종료 코드 1로 멈춤). `check`·`preview`는 암호 없이 잠그기 전 사이트를 `work/.lecpage/check-site/`에 두고 살펴보고, 올리는 `work/dist`에는 잠근 사이트만 둬요(잠그지 않은 예전 `dist`는 `check`가 비움).
 - `live` 없이 참여 기능을 켜면 연습 모드(`local`, 이 기기 안에서만). 서버는 `publish --live`(Cloudflare) 또는 강사가 만든 구글 시트·Supabase(`backends/*/README.md`)의 주소를 강사에게 받아 적어요.
 
 ## 4. 문제가 생기면

@@ -534,8 +534,14 @@
   function attendWindow() {
     var p = phaseNow(); if (!p || p.closed) return false;
     if (PHASE_Q) return p.phase === 'during';
-    var w = p.w, days = w.days && w.days.length ? w.days : [{ start: w.start, end: w.end }], now = new Date();
-    return days.some(function (d) { return now >= new Date(new Date(d.start) - 30 * 60000) && now <= new Date(+new Date(d.end) + LIVE_GRACE); });
+    var w = p.w, multi = !!(w.days && w.days.length), days = multi ? w.days : [{ start: w.start, end: w.end }], now = new Date();
+    return days.some(function (d) {
+      var e = new Date(d.end), until = +e + LIVE_GRACE;
+      // 여러 날 연수: 그날의 2시간은 그날 자정까지만. 출석은 날짜별로 적으므로(attKey·서버의 days) 자정을 넘겨 받으면 다음 날 입실로 적힘
+      // (끝 시각을 적지 않은 날은 23:59로 봄 → 다음 날 0~2시에 [출석]이 뜨고, 누르면 다음 날 시작 때 [출석]이 뜨지 않았음)
+      if (multi) until = Math.min(until, +new Date(e.getFullYear(), e.getMonth(), e.getDate() + 1) - 1);
+      return now >= new Date(new Date(d.start) - 30 * 60000) && +now <= until;
+    });
   }
   var phaseShown = '', closedShown = false;
   /** 참여를 닫았나(끝 시각 + 2시간 뒤, 또는 ?phase=after) */

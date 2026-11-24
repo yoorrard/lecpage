@@ -29,16 +29,23 @@ before(async () => {
   const r = E.assemble(SITE, META, { runtime: nodeRuntime(), prev: PREV(srv.url) });
   assert.deepEqual(r.errors, []);
   writeFiles(site, r.files);
+  // 같은 서버의 다른 연수 둘(폴더·연수 코드를 따로): 반응 단추가 있는 사이트(react/), 끝 시각을 적지 않은 이틀 연수(days/)
+  for (const [dir, meta, code] of [['react', { ...META, features: [...META.features, 'reactions'] }, 'ATTREACT'], ['days', { ...META, sessions: [{ date: '2026-11-20', start: '14:00' }, { date: '2026-11-21', start: '14:00' }] }, 'ATTDAYS']]) {
+    const x = E.assemble(SITE, meta, { runtime: nodeRuntime(), prev: { ...PREV(srv.url), live: { provider: 'http', url: srv.url, code } } });
+    assert.deepEqual(x.errors, []);
+    writeFiles(path.join(site, dir), x.files);
+  }
   browser = await chromium.launch();
 });
 after(async () => { await browser?.close(); await srv?.close(); if (site) fs.rmSync(site, { recursive: true, force: true }); });
 
-const at = (hm) => new Date(`2026-11-20T${hm}:00+09:00`);
-async function open(ctx, time) {
+const at = (hm, day = '2026-11-20') => new Date(`${day}T${hm}:00+09:00`);
+/** file: 열 쪽(기본 참가자 첫 쪽), day: 그날(기본 연수 날 2026-11-20) */
+async function open(ctx, time, file = 'index.html', day) {
   const page = await ctx.newPage(); const errs = []; page.on('pageerror', (e) => errs.push(String(e))); page._errs = errs;
-  await page.clock.install({ time: at(time) });
-  await page.goto(srv.url + '/index.html');
-  await page.waitForSelector('html[data-phase]');
+  await page.clock.install({ time: at(time, day) });
+  await page.goto(srv.url + '/' + file);
+  if (/index\.html$/.test(file)) await page.waitForSelector('html[data-phase]');
   return page;
 }
 const vis = (page, sel) => page.evaluate((s) => { const n = document.querySelector(s); return !!n && !n.hidden && !!n.offsetParent; }, sel);
@@ -199,5 +206,71 @@ test('질문은 별명 창 없이 바로 올라감(서버가 참가자 번호로
     await p.waitForSelector('[data-qa-list] .lp-qa-item', { timeout: 10000 });
     assert.equal(await p.locator('[data-join-dialog][open]').count(), 0, '질문 전에 별명 창이 뜨지 않음');
     assert.deepEqual(p._errs, []);
+  } finally { await ctx.close(); }
+});
+
+// 독립 검토(2026-11-24)에서 찾은 것
+test('반응을 먼저 누른 사람(창 없이 저절로 참여)이 [퇴실 확인] 창에 적은 이름·동의가 서버에 남음(전에는 버려져 이름 없는 출석 기록이 됨)', { skip }, async () => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'ko-KR', timezoneId: 'Asia/Seoul' });
+  const A = api(srv.url, 'ATTREACT');
+  const people = async () => (await A.call('GET', '/participants', { admin: ADMIN })).body;
+  try {
+    const p = await open(ctx, '16:30', 'react/index.html');
+    await p.waitForFunction(() => /^(live|polling)$/.test(document.querySelector('[data-live-status]')?.getAttribute('data-state') || ''), null, { timeout: 15000 });
+    // 반응 하나: 창 없이 참여됨(서버에 '참가자NNN' 한 줄) — 참가자 화면은 아직 참여한 줄 모름
+    await p.evaluate(() => document.querySelector('[data-react]').click());
+    const t0 = Date.now(); let rows = [];
+    while (Date.now() - t0 < 10000 && !rows.length) { rows = await people(); if (!rows.length) await new Promise((r) => setTimeout(r, 200)); } // eslint-disable-line no-await-in-loop
+    assert.equal(rows.length, 1, '반응만으로 참가자 한 줄');
+    assert.ok(!rows[0].name && !rows[0].consentAt);
+    assert.equal(await p.evaluate(() => localStorage.getItem('lp-ATTREACT:me')), null);
+    // [퇴실 확인] → 같은 창에 이름·소속·동의 → 그 한 줄에 이름과 동의 시각이 붙고, 퇴실이 그 사람 것으로 남음
+    await p.evaluate(() => document.querySelector('button[data-attend="out"]').click());
+    await fillJoin(p, '반응 먼저 누른 사람');
+    await p.waitForFunction(() => /퇴실 확인/.test(document.querySelector('[data-attend-state]')?.textContent || ''), null, { timeout: 30000 });
+    rows = await people();
+    assert.equal(rows.length, 1, '새 참가자를 만들지 않고 그 줄을 고침: ' + JSON.stringify(rows.map((x) => x.nickname)));
+    assert.equal(rows[0].name, '반응 먼저 누른 사람'); assert.equal(rows[0].school, '새봄중학교');
+    assert.ok(rows[0].consentAt > 0, '동의 시각');
+    assert.deepEqual((await A.call('GET', '/attendance', { admin: ADMIN })).body.filter((x) => x.by === rows[0].id).map((x) => x.kind), ['out']);
+    assert.deepEqual(p._errs, []);
+  } finally { await ctx.close(); }
+});
+
+test('여러 날 연수(끝 시각을 적지 않음): 첫날의 2시간은 자정까지만 — 둘째 날 0시 30분에는 [출석]이 뜨지 않고, 둘째 날 시작 30분 전부터 뜸', { skip }, async () => {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'ko-KR', timezoneId: 'Asia/Seoul' });
+  try {
+    // 첫날 23:30: 첫날 연수 시간 안(끝 시각이 없으면 23:59까지) — [출석]이 떠 있음
+    const d1 = await open(ctx, '23:30', 'days/index.html');
+    assert.equal(await shown(d1, '[data-dock-attend]'), true, '첫날 밤에는 그대로');
+    // 둘째 날 00:30: 전에는 첫날의 2시간(23:59 + 2시간)에 걸려 [출석]이 떴고, 누르면 둘째 날 입실(00:30)로 적혀 정작 시작 때 뜨지 않았음
+    const p = await open(ctx, '00:30', 'days/index.html', '2026-11-21');
+    assert.equal(await p.getAttribute('html', 'data-phase'), 'during');
+    assert.equal(await shown(p, '[data-dock]'), true, '참여 막대는 그대로');
+    assert.equal(await shown(p, '[data-dock-attend]'), false, '자정을 넘기면 첫날의 [출석]은 뜨지 않음');
+    assert.equal(await vis(p, '[data-attend="in"]'), true, '출석 칸의 단추는 전과 같음');
+    // 13:35(둘째 날 시작 14:00의 30분 전을 지남): [출석]이 뜸
+    await p.clock.fastForward('13:05:00'); await p.clock.runFor(31000);
+    assert.equal(await shown(p, '[data-dock-attend]'), true, '둘째 날 시작 30분 전부터');
+    assert.deepEqual(p._errs, []); assert.deepEqual(d1._errs, []);
+  } finally { await ctx.close(); }
+});
+
+test("강사 화면의 '연수가 끝났어요 … CSV로 받은 뒤 지워 주세요'는 끝 시각 + 2시간 뒤에(참가자가 퇴실 확인을 누를 수 있는 동안에는 뜨지 않음)", { skip, timeout: 90000 }, async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 }, locale: 'ko-KR', timezoneId: 'Asia/Seoul' });
+  const login = async (time) => {
+    const c = await open(ctx, time, 'console.html');
+    await c.fill('#lp-key', ADMIN); await c.click('[data-key-go]');
+    await c.waitForSelector('[data-console-main]:not([hidden])', { timeout: 20000 });
+    await c.waitForSelector('.lp-con-net-r');
+    return c;
+  };
+  try {
+    const soon = await login('17:30'); // 끝 시각(17:00) 뒤 30분: 참가자 화면은 아직 퇴실 확인을 받음
+    assert.equal(await soon.locator('.lp-con-after').count(), 0, '끝 시각 바로 뒤에는 뜨지 않음');
+    const late = await login('19:30');
+    assert.equal(await late.locator('.lp-con-after').count(), 1);
+    assert.match(await late.textContent('.lp-con-after'), /연수가 끝났어요/);
+    assert.deepEqual(soon._errs, []); assert.deepEqual(late._errs, []);
   } finally { await ctx.close(); }
 });

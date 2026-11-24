@@ -323,8 +323,11 @@
     }
     return C.box;
   }
-  /** 연수 날짜·시간이 지났나(참가자 화면의 '끝난 연수'와 같은 기준). 주소 끝 ?phase=after로 미리보기 */
-  function ended() { if (/[?&]phase=after\b/.test(location.search)) return true; var e = DATA.phase && Date.parse(DATA.phase.end); return !!e && Date.now() > e; }
+  /**
+   * 연수가 끝났나: 참가자 화면이 참여를 닫는 때와 같은 기준(예정 끝 시각 + 2시간 — lecpage.js LIVE_GRACE). 주소 끝 ?phase=after로 미리보기.
+   * 끝 시각 바로 뒤에는 참가자가 아직 퇴실 확인을 누를 수 있어, 그때 '명단을 받은 뒤 지워 주세요'라고 하면 늦은 퇴실이 명단에서 빠짐
+   */
+  function ended() { var LIVE_GRACE = 2 * 3600000; if (/[?&]phase=after\b/.test(location.search)) return true; var e = DATA.phase && Date.parse(DATA.phase.end); return !!e && Date.now() > e + LIVE_GRACE; }
   function qrBig() { return (state.ui || {}).qrBig === true; }
   function clip(t, n) { var c = Array.from ? Array.from(String(t || '')) : String(t || '').split(''); return c.length > n ? c.slice(0, n).join('') + '…' : c.join(''); }
   /** 발표 화면에 지금 크게 보이는 것(발표 화면과 같은 규칙: 열린 투표 > 질문 > 기다리는 화면) */
@@ -551,7 +554,8 @@
     // 열면 발표 화면에도 그 투표를 띄우고, 닫으면 투표를 띄워 둔 발표 화면을 교재로 돌림
     var ui = openNow ? (ovNow() === 'poll' ? { ov: null } : null) : { ov: 'poll', qrBig: null };
     setState(Object.assign({ openPoll: openNow ? '' : p.id }, ui ? { ui: ui } : {}), openNow ? '투표를 닫았어요.' : '투표를 띄웠어요. 참가자 화면과 발표 화면에 나와요.');
-    if (p.quick && p.open === openNow) conn.update('polls', p.id, { open: !openNow }).catch(function () { });
+    // 잠깐 끊긴 망은 연결 쪽이 조금 뒤 다시 보냄(live/core.js _call). 그래도 안 되면 알림: 조용히 넘기면 닫은 즉석 투표가 서버에는 열린 채 남아 늦은 답을 받음
+    if (p.quick && p.open === openNow) conn.update('polls', p.id, { open: !openNow }).catch(err);
   }
   function registerPoll(p) {
     if (LOCAL || !p || !p.id || String(p.id).length > 37) return;

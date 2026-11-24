@@ -4,6 +4,7 @@ import { Steps, ClickShot } from './Steps.jsx';
 import { E } from '../lib/engine.js';
 import { copy, randomKey, sha256Hex, toast } from '../lib/util.js';
 import { loadKey, saveKey, forgetKey } from '../lib/ai.js';
+import { adminSlot, adminKeyFrom } from '../lib/console-key.js';
 import { deployView, patchDeploy, featuresOf } from '../lib/site-meta.js';
 import { useCfWay, CfProgress, CfGetConnect, ensureRelay, cfFail, checkAdminKey } from './CfConnect.jsx';
 import { markCfUsed } from '../lib/cf-connect.js';
@@ -18,8 +19,8 @@ import { sheetInstallCode, withSheetInstall, supabaseInstallSql, parseSupabasePa
  */
 export const rememberedServer = () => loadKey('live-server').then((r) => (r.key && /^https:\/\//.test(r.key) ? r.key : ''), () => '');
 // 관리자 키는 서버 주소와 연수 코드로 기억(Supabase 프로젝트 하나에 연수 여럿이면 연수마다 키가 다름). 예전에 주소로만 기억한 키도 그대로 찾음
-const adminSlot = (url, code = '') => 'live-admin:' + String(url).replace(/\/+$/, '') + (code ? '#' + code : '');
-export const adminKeyFor = (url, code = '') => (url ? loadKey(adminSlot(url, code)).then((r) => r.key || (code ? loadKey(adminSlot(url)).then((x) => x.key || '', () => '') : ''), () => '') : Promise.resolve(''));
+// (자리 이름과 찾는 순서는 lib/console-key.js: 처음 화면의 '내 연수' 목록도 같은 것을 씀)
+export const adminKeyFor = (url, code = '') => adminKeyFrom(loadKey, url, code);
 const keepAdminKey = (url, key, code = '') => { saveKey(adminSlot(url), key, true).catch(() => { }); if (code) saveKey(adminSlot(url, code), key, true).catch(() => { }); };
 /** 연결한 내 서버를 이 기기에 기억(다음 연수부터 저절로) + 그 서버의 관리자 키 */
 export const rememberServer = (url, key, code = '') => { saveKey('live-server', url, true).catch(() => { }); if (key) keepAdminKey(url, key, code); };

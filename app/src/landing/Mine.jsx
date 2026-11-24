@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { stageOf, duplicateProject, deleteProject, exportProjectFile } from '../lib/project.js';
 import { Dialog } from '../components/ui.jsx';
 import { copy, fmtDate, toast, saveFile, safeName } from '../lib/util.js';
+import { consoleKeySource, liveOf, adminKeyFrom } from '../lib/console-key.js';
 
 // 첫 화면의 '내 연수' 목록. 만든 연수가 있을 때만 받아요(처음 오는 사람의 첫 화면을 가볍게).
 const STAGE = ['', '교재 넣기', '만들기·수정', '배포하기'];
@@ -51,15 +52,17 @@ export function Mine({ list, once, busyProps, reload }) {
     // 누른 줄이 없어져 초점이 사라졌으면(마지막 연수를 지움 등) 본문으로: 키보드·화면 읽기 프로그램이 처음부터 다시 가지 않게
     setTimeout(() => { if (!document.activeElement || document.activeElement === document.body) document.getElementById('main')?.focus({ preventScroll: true }); }, 60);
   }
-  // 배포한 연수의 강사 화면 관리자 키(바로 배포는 연수에, 내 서버·시트는 이 기기의 키 보관함에). 보관함 모듈은 필요할 때만 받음
+  // 배포한 연수의 강사 화면 관리자 키(바로 배포는 연수에, 내 서버·시트는 이 기기의 키 보관함에). 보관함 모듈은 필요할 때만 받음.
+  // 고르는 규칙은 배포 완료 카드와 같음(lib/console-key.js): 지금 사이트가 쓰는 방의 키만 — 바로 배포 방을 쓰다 내 서버로 바꾼 연수에 남은 예전 방의 키를 복사해 주지 않음.
+  // AI가 만든 연수의 연결은 meta.live에 있음(liveOf). 어느 키인지 알 수 없으면 복사하지 않고 강사 화면만 엶('복사했어요'라고 하지 않음)
   const [keys, setKeys] = useState({});
   useEffect(() => {
     const pub = list.filter((p) => p.deploy?.lastUrl && hasRoom(p));
     if (!pub.length) return;
-    const now = Object.fromEntries(pub.filter((p) => p.deploy.lecpage?.adminKey).map((p) => [p.id, p.deploy.lecpage.adminKey]));
-    setKeys(now);
-    const rest = pub.filter((p) => !now[p.id] && p.blueprint?.live?.url);
-    if (rest.length) import('../lib/ai.js').then((m) => Promise.all(rest.map((p) => m.loadKey('live-admin:' + String(p.blueprint.live.url).replace(/\/+$/, '')).then((r) => [p.id, r.key])))).then((kv) => setKeys((k) => ({ ...k, ...Object.fromEntries(kv.filter((x) => x[1])) })), () => { });
+    const src = pub.map((p) => [p.id, consoleKeySource(p, liveOf(p))]);
+    setKeys(Object.fromEntries(src.filter(([, s]) => s?.key).map(([id, s]) => [id, s.key])));
+    const rest = src.filter(([, s]) => s?.url);
+    if (rest.length) import('../lib/ai.js').then((m) => Promise.all(rest.map(([id, s]) => adminKeyFrom(m.loadKey, s.url, s.code).then((k) => [id, k])))).then((kv) => setKeys((k) => ({ ...k, ...Object.fromEntries(kv.filter((x) => x[1])) })), () => { });
   }, [list]);
   const delTag = del?.deploy?.lastUrl ? deployTag(del) : null;
   const live = !!delTag && !delTag.gone; // 아직 열려 있는 배포한 연수

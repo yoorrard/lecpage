@@ -19,6 +19,9 @@ const mimeOf = (path) => MIME[(String(path).split('.').pop() || '').toLowerCase(
  * - 스크립트가 링크 주소(a.href: 틀 문서 기준의 절대 주소)를 그림 주소로 쓸 때(크게 보기)도 같은 경로로 알아봄
  * - 그림을 넘겨받기 전(R이 false)에 스크립트가 넣은 사이트 그림 주소는 틀에서 열 수 없으므로(막힌 요청과 콘솔 오류만 남음) 빈 그림 자리(#lp-late=경로)로 두었다가 받으면 바꿈.
  *   넘겨받은 그림에 없는 경로(사이트에 없는 그림)의 자리는 적힌 주소로 되돌림: 열리지 않는 그림으로 남아 검사가 사실대로 알림
+ * - 빈 그림 자리를 넣어 준 그림 요소는 따로 적어 둠(P): 받기 전에 만들어 두기만 하고 문서에는 나중에 붙이는 그림(쪽을 미리 받아 두는 스크립트)은
+ *   document.images에 없어, 적어 두지 않으면 받은 뒤에도 1×1 빈 그림인 채로 붙음(깨진 그림이 아니라 검사도 모름). 받으면 이 요소들도 같이 바꾸고 목록을 비움
+ * - '/'로 시작하는 주소(/material/p-001.webp)는 사이트 맨 위 기준으로 봄(엔진 resolvePath와 같음). SVG도 같은 길로 바꿈(AI가 글 파일로 쓴 SVG를 스크립트가 넣을 때)
  */
 export const LATE_JS = `<script>(function(){
 var U=Object.create(null);
@@ -26,15 +29,15 @@ var B='';try{B=String(document.baseURI||'').replace(/[?#].*$/,'').replace(/[^\\/
 function dec(v){try{return decodeURI(v)}catch(e){return v}}
 function norm(v){v=String(v==null?'':v);var m=/#lp-late=(.+)$/.exec(v);if(m)return dec(m[1]);
 if(B&&v.indexOf(B)===0)v=v.slice(B.length);
-if(!v||/^(data:|blob:|https?:|\\/\\/|#|about:|javascript:)/i.test(v))return '';return v.replace(/^(\\.\\/)+/,'').replace(/[?#].*$/,'')}
+if(!v||/^(data:|blob:|https?:|\\/\\/|#|about:|javascript:)/i.test(v))return '';return v.replace(/^(\\.\\/)+/,'').replace(/^\\/+/,'').replace(/[?#].*$/,'')}
 function hit(v){var k=norm(v);return k?(U[k]||U[dec(k)]||''):''}
-var R=false,PX='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',IM=/\\.(png|jpe?g|webp|gif|avif)$/i;
-function map(v){var h=hit(v);if(h)return h;if(!R&&String(v).indexOf('#lp-late=')<0){var k=norm(v);if(k&&IM.test(k))return PX+'#lp-late='+encodeURI(k)}return v}
+var R=false,P=[],PX='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',IM=/\\.(png|jpe?g|webp|gif|avif|svg)$/i;
+function map(v,el){var h=hit(v);if(h)return h;if(!R&&String(v).indexOf('#lp-late=')<0){var k=norm(v);if(k&&IM.test(k)){if(el&&P.indexOf(el)<0)P.push(el);return PX+'#lp-late='+encodeURI(k)}}return v}
 var D=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');
 var set=function(el,v){if(D&&D.set)D.set.call(el,v);else el.setAttribute('src',v)};
-try{if(D&&D.set)Object.defineProperty(HTMLImageElement.prototype,'src',{configurable:true,enumerable:D.enumerable,get:function(){return D.get.call(this)},set:function(v){D.set.call(this,map(v))}})}catch(e){}
+try{if(D&&D.set)Object.defineProperty(HTMLImageElement.prototype,'src',{configurable:true,enumerable:D.enumerable,get:function(){return D.get.call(this)},set:function(v){D.set.call(this,map(v,this))}})}catch(e){}
 var SA=Element.prototype.setAttribute;
-Element.prototype.setAttribute=function(n,v){return SA.call(this,n,this.tagName==='IMG'&&String(n).toLowerCase()==='src'?map(v):v)};
+Element.prototype.setAttribute=function(n,v){return SA.call(this,n,this.tagName==='IMG'&&String(n).toLowerCase()==='src'?map(v,this):v)};
 function fixSet(el){var v=el.getAttribute('srcset');if(!v)return;var t=v.replace(/^\\s+|\\s+$/g,'').split(/\\s+/),out=[],cur=null,ch=false;
 function push(u,d){var h=hit(u);if(h){u=h;ch=true}out.push(d?u+' '+d:u)}
 for(var i=0;i<t.length;i++){var x=t[i];if(!x)continue;
@@ -49,6 +52,7 @@ addEventListener('error',function(e){var t=e.target;if(t&&t.tagName==='IMG')fix(
 addEventListener('message',function(e){var d=e.data;if(e.source!==parent||!d||d.type!=='lp-late-files'||!d.files)return;
 for(var k in d.files){if(!U[k]){try{U[k]=URL.createObjectURL(d.files[k])}catch(x){}}}
 R=true;fixAll();
+for(var i=0;i<P.length;i++)fix(P[i]);P=[];
 try{parent.postMessage({type:'lp-late-done',n:Object.keys(d.files).length},'*')}catch(x){}});
 })();<\/script>`;
 
@@ -56,13 +60,15 @@ const made = new WeakMap(); // 바이트 → Blob(같은 바이트를 여러 틀
 /**
  * 틀 안 문서로 넘길 메시지. files: 조립 결과(previewHtml에 준 것). 사이트의 그림 파일을 모두 넘김(스크립트가 실행 중에 만드는 주소도 열리게).
  * skipped(previewHtml이 못 담았다고 적은 경로)는 꼭 넘겨야 하는 것이라 files에 없는 이름이 섞여도 함께 살핌
+ * 글로 든 파일은 SVG만 넘김(AI가 글 파일로 쓴 그림 — 스크립트가 img.src = 'assets/icon-' + 이름 + '.svg'로 넣으면 이 길 말고는 열 수 없음)
  * @returns {{ type: 'lp-late-files', files: Record<string, Blob> }} 그림이 없어도 보냄(틀 안 코드가 '다 받았다'를 알아야 없는 그림을 사실대로 깨진 채 둠)
  */
 export function lateFilesMsg(files, skipped) {
   const out = {};
   for (const path of new Set([...Object.keys(files || {}), ...(skipped || [])])) {
     const v = files?.[path]; const type = mimeOf(path);
-    if (!type || v == null || typeof v === 'string') continue; // 그림 바이트만(글꼴·CSS 속 주소는 다루지 않음)
+    if (!type || v == null) continue; // 그림만(글꼴·CSS 속 주소는 다루지 않음)
+    if (typeof v === 'string') { if (type === MIME.svg && v) out[path] = new Blob([v], { type }); continue; } // 글은 WeakMap에 적어 둘 수 없어 그때마다 만듦(작음)
     let b = v instanceof Blob ? v : made.get(v);
     if (!b) { b = new Blob([v], { type }); made.set(v, b); }
     out[path] = b;
@@ -78,6 +84,6 @@ export function inSite(files, src, page = 'index.html') {
   const parts = v.startsWith('/') ? [] : String(page).split('/').slice(0, -1); // '/'로 시작하면 사이트 맨 위 기준
   for (const seg of v.split('/')) { if (seg === '.' || seg === '') continue; if (seg === '..') { if (!parts.length) return false; parts.pop(); } else parts.push(seg); }
   const f = files?.[parts.join('/')];
-  if (f == null || !/\.(png|jpe?g|webp|gif|avif)$/i.test(parts.join('/'))) return false;
+  if (f == null || !/\.(png|jpe?g|webp|gif|avif|svg)$/i.test(parts.join('/'))) return false;
   return (typeof f === 'string' ? f.length : f.size ?? f.byteLength ?? 0) > 0;
 }

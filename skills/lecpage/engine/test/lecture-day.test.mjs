@@ -54,8 +54,12 @@ after(async () => { await browser?.close(); await srv?.close(); if (site) fs.rmS
 
 const put = (body) => A.call('PUT', '/state', { admin: ADMIN, body });
 const live = (p) => p.waitForFunction(() => /^(live|polling)$/.test(document.querySelector('[data-live-status]')?.getAttribute('data-state') || ''), null, { timeout: 15000 });
+// 참가자 화면의 시계는 연수 날 낮에 맞춰 둠(attend-phase와 같은 방식 — 시간은 그 시각부터 평소처럼 흐름): 진짜 날짜를 그대로 쓰면
+// 연수 날(2026-11-24) 끝 + 2시간이 지난 뒤로는 참여 막대·'지금' 줄이 닫혀 이 시험이 날짜 때문에 깨짐
+const DAY_NOON = new Date('2026-11-24T10:00:00+09:00');
 async function openPage(ctx, file = 'index.html') {
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(String(e))); p._errs = errs;
+  await p.clock.install({ time: DAY_NOON });
   await p.goto(srv.url + '/' + file); await live(p);
   return p;
 }
@@ -208,4 +212,48 @@ test('접속 확인·개인정보 안내: 320~360px 휴대폰에서 옆으로 �
       }
     } finally { await ctx.close(); }
   }
+});
+
+// 독립 검토(2026-11-24): 즉석 투표를 닫는 요청이 끝내 실패하면 조용히 넘어가 서버에는 열린 채 남았음(늦은 답을 받음).
+// 잠깐 끊긴 것은 연결 쪽이 조금 뒤 다시 보내고(모두 세 번까지), 그래도 안 되면 강사 화면이 알림
+test('강사 화면: 즉석 투표 닫기가 한 번 실패하면 조금 뒤 다시 보내고, 그래도 안 되면 알림(조용히 넘기지 않음)', { skip, timeout: 90000 }, async () => {
+  const cc = await browser.newContext({ viewport: { width: 1366, height: 900 }, ...KO });
+  const Q = '닫기를 다시 보내는지 보는 즉석 투표';
+  const doc = async () => (await A.call('GET', '/polls', { admin: ADMIN })).body.find((x) => x.question === Q);
+  const until = async (fn, ms = 10000) => { const t0 = Date.now(); for (;;) { const v = await fn(); if (v || Date.now() - t0 > ms) return v; await new Promise((r) => setTimeout(r, 150)); } }; // eslint-disable-line no-await-in-loop
+  try {
+    await put({ slide: 0, openPoll: null, notice: null, timer: null });
+    const c = await login(cc);
+    await c.click('.lp-con-quick summary');
+    await c.fill('#lp-qp-q', Q);
+    const opts = c.locator('.lp-con-quick .lp-con-opts input'); await opts.nth(0).fill('가'); await opts.nth(1).fill('나');
+    await c.click('.lp-con-quick [type=submit]');
+    const made = await until(doc); assert.ok(made && made.open === true, '즉석 투표가 열림');
+    const close = c.locator('button', { hasText: /^투표 닫기$/ }); await close.waitFor({ timeout: 10000 });
+    // ① 닫는 요청이 한 번 끊김 → 조금 뒤 다시 보내 서버에서도 닫힘
+    let fail = 1; const tried = [];
+    await c.route('**/api/' + CODE + '/polls/*', (route) => {
+      if (route.request().method() !== 'PATCH') return route.continue();
+      tried.push(Date.now());
+      if (fail > 0) { fail--; return route.abort('failed'); }
+      return route.continue();
+    });
+    await close.click();
+    assert.ok(await until(async () => (await doc()).open === false), '다시 보내 서버에서도 닫힘');
+    assert.equal(tried.length, 2, '한 번 실패 + 한 번 더');
+    assert.ok(tried[1] - tried[0] >= 400, `조금 뒤에 다시(${tried[1] - tried[0]}ms)`);
+    assert.doesNotMatch(await text(c, '[data-toast]'), /처리하지 못했어요/);
+    // ② 다시 열었다가 닫는데 번번이 끊김 → 세 번까지 보낸 뒤 알림(서버에는 열린 채이므로 강사가 알아야 함 — 전에는 아무 말이 없었음)
+    const li = c.locator('.lp-con-polls li', { hasText: Q }).filter({ hasText: '닫힘' }); await li.waitFor({ timeout: 10000 }); // 강사 화면도 닫힌 것을 앎
+    await li.locator('button', { hasText: /^열기$/ }).click();
+    assert.ok(await until(async () => (await doc()).open === true), '다시 엶');
+    await close.waitFor({ timeout: 10000 });
+    await c.waitForTimeout(500); // 여는 요청의 답(열린 투표)이 강사 화면에 닿을 틈
+    fail = 99; tried.length = 0;
+    await close.click();
+    await c.waitForFunction(() => /처리하지 못했어요/.test(document.querySelector('[data-toast]').textContent), null, { timeout: 15000 });
+    assert.equal(tried.length, 3, '세 번까지만 보냄');
+    assert.equal((await doc()).open, true, '서버에는 열린 채');
+    assert.deepEqual(c._errs, []);
+  } finally { await put({ openPoll: null }); await cc.close(); }
 });

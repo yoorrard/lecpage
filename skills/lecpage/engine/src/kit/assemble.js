@@ -453,7 +453,9 @@ function widgetFor(type, t, inner, ctx, col, page, warn) {
       // 첫 쪽 그림 비율이 16:9와 다르면(A4 세로 자료집·4:3 슬라이드) 키트 CSS가 그 비율로 그림 칸을 잡음(--lpk-deck-ratio)
       const dim = ctx.pageSize(list[0].page);
       if (dim && dim.w > 0 && dim.h > 0 && Math.abs(dim.w / dim.h - 16 / 9) > 0.05) col.deckRatio = `${dim.w}/${dim.h}`;
-      return { html: W.deckBox(list, { label: ctx.words.deck, host: ctx.words.host }) };
+      // 쪽마다 그림 크기를 함께 넘김: 비율이 다른 쪽(가로 슬라이드 사이의 세로 문서 쪽)은 그 쪽만 제 비율로 그림 칸을 잡음(W.deckBox).
+      // col.deck(강사·발표 화면이 쓰는 목록)에는 넣지 않음
+      return { html: W.deckBox(list.map((sl) => ({ ...sl, size: ctx.pageSize(sl.page) })), { label: ctx.words.deck, host: ctx.words.host }) };
     }
     case 'materials': {
       const j = W.jsonAttr(attr(t, 'data-items'));

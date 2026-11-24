@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
+import zlib from 'node:zlib';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { webcrypto } from 'node:crypto';
@@ -109,6 +110,8 @@ test('접속 확인: 앱의 미리보기(출처 없는 틀)에서는 재지 않�
 test('키트 CSS: 강조색 위 글자는 강조색 밝기로(상대 색), --lp-on-accent로 정할 수 있고, 옛 브라우저는 조립 값', () => {
   const css = fs.readFileSync(path.join(SKILL, 'engine', 'runtime', 'kit.css'), 'utf8');
   assert.match(css, /@supports \(color:color\(from red srgb-linear r g b\)\)\{\s*\.lpk\{\s*--_on-auto:color\(from var\(--_acf\) srgb-linear clamp\(0,\(\.1791 - /);
+  // 글자는 늘 불투명(/ 1): 상대 색은 바탕색의 투명도를 물려받아, 반투명 글자색만 정한 사이트에서 단추 글자까지 반투명해졌음
+  assert.match(css, /--_on-auto:color\(from var\(--_acf\) srgb-linear [^;]*\*1e6,1\) \/ 1\);/);
   // 칠하는 자리의 강조색(--_acf)은 currentColor로 내려가지 않음: 강조색·글자색을 정하지 않은 사이트에서 주 단추([입실 확인])가 흰 바탕에 흰 글자가 되던 것
   assert.match(css, /--_acf:var\(--lp-accent,var\(--lpk-accent,var\(--lp-ink,var\(--lpk-ink,CanvasText\)\)\)\);/);
   assert.match(css, /\.lpk \.lp-btn-primary\{background:var\(--_acf\);border-color:var\(--_acf\);color:var\(--_on\)\}/);
@@ -175,6 +178,21 @@ test('브라우저: 어두운 모드에서 강조색을 밝게 바꿔도 주 단
     const follow = await page.evaluate(() => { const r = document.querySelector('.lp-follow').getBoundingClientRect(); return [r.width, r.height]; });
     assert.ok(follow[1] >= 44, '따라 넘기기 높이 ' + follow[1]);
   }, { scheme: 'dark' });
+  // 반투명 글자색만 정한 사이트(강조색 없음, --lp-ink: rgba(0,0,0,.6)): 주 단추 글자가 바탕의 투명도를 물려받아 3.22:1로 떨어졌음 → 불투명한 글자로 4.5:1 이상
+  await withSite({ 'index.html': `<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>:root{--lp-ink:rgba(0,0,0,.6)}body{margin:0;background:#fff}</style><link rel="stylesheet" href="kit.css"></head><body><div class="lpk"><button class="lp-btn lp-btn-primary">입실 확인</button></div></body></html>`, 'kit.css': fs.readFileSync(path.join(SKILL, 'engine', 'runtime', 'kit.css'), 'utf8') }, async (page, base) => {
+    await page.goto(base);
+    const st = await page.evaluate(() => {
+      const cs = getComputedStyle(document.querySelector('.lp-btn-primary'));
+      const cv = document.createElement('canvas'); cv.width = cv.height = 1; const cx = cv.getContext('2d', { willReadFrequently: true });
+      // 색을 흰 바탕(쪽) 또는 그 아래 색 위에 실제로 칠해 봄(반투명까지)
+      const over = (c, under) => { cx.fillStyle = `rgb(${under.join(',')})`; cx.fillRect(0, 0, 1, 1); cx.fillStyle = c; cx.fillRect(0, 0, 1, 1); return [...cx.getImageData(0, 0, 1, 1).data].slice(0, 3); };
+      const lum = (c) => { const a = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2]; };
+      const bg = over(cs.backgroundColor, [255, 255, 255]), fg = over(cs.color, bg);
+      const [x, y] = [lum(fg), lum(bg)];
+      return { ratio: (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05), color: cs.color };
+    });
+    assert.ok(st.ratio >= 4.5, `반투명 글자색만 정한 사이트의 주 단추 대비 ${st.ratio.toFixed(2)} (${st.color})`);
+  });
 });
 
 // ── 4. check 화면 그림: 늦게 받는 그림·화면에 들어와야 도는 움직임 ──
@@ -337,4 +355,98 @@ test('자리를 정한 키트 부품(지금 줄·참여 막대·공유)은 그 �
   const three = K.assemble({ 'index.html': one, 'practice.html': PAGE('<section><h2>질문</h2><div data-lp="qa"></div></section>') }, { ...META, features: ['qa', 'help'] }, { runtime: rt, prev: { live: { provider: 'http', url: 'https://live.example.kr', code: 'NOWPAGE' } } });
   assert.match(three.files['practice.html'], /lpk-dock-share/, '공유 자리를 정하지 않은 쪽의 막대에는 공유 단추');
   assert.doesNotMatch(three.files['index.html'], /lpk-dock-share/);
+});
+
+// ── Skill 실제 실행(PPTX + DOCX 교재, 2026-11-24)에서 찾은 것 ──────────────────────────────
+/** 한 색으로 칠한 PNG(w×h): 쪽 그림의 실제 크기·비율을 시험하려고 */
+function png(w, h, rgb = [236, 236, 236]) {
+  const table = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (buf) => { let c = 0xffffffff; for (const x of buf) c = table[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const td = Buffer.concat([Buffer.from(type), data]), len = Buffer.alloc(4), sum = Buffer.alloc(4); len.writeUInt32BE(data.length); sum.writeUInt32BE(crc(td)); return Buffer.concat([len, td, sum]); };
+  const head = Buffer.alloc(13); head.writeUInt32BE(w, 0); head.writeUInt32BE(h, 4); head[8] = 8; head[9] = 2; // 8비트 RGB
+  const row = Buffer.alloc(1 + w * 3); for (let x = 0; x < w; x++) row.set(rgb, 1 + x * 3);
+  return new Uint8Array(Buffer.concat([Buffer.from([0x89, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', head), chunk('IDAT', zlib.deflateSync(Buffer.concat(Array.from({ length: h }, () => row)))), chunk('IEND', Buffer.alloc(0))]));
+}
+const deckSite = (imgs) => ({ 'index.html': PAGE('<section><h2>교재</h2><div data-lp="deck"></div></section>'), ...Object.fromEntries(imgs.map((v, i) => [`material/p-00${i + 1}.${v === WEBP ? 'webp' : 'png'}`, v])) });
+const slideImgs = (html) => [...html.matchAll(/<figure class="lp-slide"[^>]*><img[^>]*>/g)].map((m) => m[0]);
+
+test('교재 슬라이드: 비율이 다른 쪽(가로 슬라이드 사이의 세로 문서 쪽)은 그 쪽 그림만 제 비율로 — 한 비율뿐인 교재는 전과 똑같은 글', () => {
+  const tall = png(935, 1210), wide = png(1280, 720);
+  // 가로(16:9) 둘 + 세로 하나: 세로 쪽만 인라인 비율
+  const mixed = slideImgs(K.assemble(deckSite([WEBP, WEBP, tall]), META, { runtime: rt }).files['index.html']);
+  assert.equal(mixed.length, 3);
+  assert.ok(!/style=/.test(mixed[0]) && !/style=/.test(mixed[1]), '교재 비율인 쪽은 그대로');
+  assert.match(mixed[2], /decoding="async" style="aspect-ratio:935\/1210">$/);
+  // 세로 교재(첫 쪽이 세로 — 키트 CSS가 그 비율로 칸을 잡음) 사이의 가로 쪽: 가로 쪽만
+  const r2 = K.assemble(deckSite([tall, wide, tall]), META, { runtime: rt });
+  assert.match(r2.files['assets/kit.css'], /:root\{--lpk-deck-ratio:935\/1210\}/);
+  assert.deepEqual(slideImgs(r2.files['index.html']).map((x) => (/style="([^"]*)"/.exec(x) || [])[1] || ''), ['', 'aspect-ratio:1280/720', '']);
+  // 한 비율뿐인 교재(가로만·세로만·크기를 모르는 그림): 인라인 비율이 없고, 크기를 넘기지 않았을 때와 글자 하나까지 같음
+  const unknown = new Uint8Array([82, 73, 70, 70, 0, 0, 0, 0, 87, 69, 66, 80]);
+  for (const one of [[WEBP, WEBP, WEBP], [tall, tall], [wide, WEBP]]) assert.deepEqual(slideImgs(K.assemble(deckSite(one), META, { runtime: rt }).files['index.html']).filter((x) => /style=/.test(x)), []);
+  assert.doesNotMatch(K.assemble({ ...deckSite([WEBP, WEBP]), 'material/p-002.webp': unknown }, META, { runtime: rt }).files['index.html'], /<img[^>]*style="aspect-ratio/);
+  const list = [1, 2, 3].map((p) => ({ page: p, src: `material/p-00${p}.webp`, title: p + '쪽', text: '' }));
+  assert.equal(K.deckBox(list.map((x) => ({ ...x, size: { w: 1467, h: 825 } }))), K.deckBox(list), '비율이 모두 같으면 전과 같은 글');
+  assert.equal(K.deckBox(list.map((x) => ({ ...x, size: null }))), K.deckBox(list));
+});
+
+test('브라우저: 가로 교재 사이의 세로 쪽이 390 휴대폰에서 읽을 만한 크기(제자리·전체 화면 모두 폭 330px 이상 — 전에는 139px·156px)', { skip }, async () => {
+  const r = K.assemble(deckSite([WEBP, WEBP, png(935, 1210)]), META, { runtime: rt });
+  await withSite(r.files, async (page, base) => {
+    await page.goto(base + '?phase=during');
+    await page.waitForSelector('.lp-deck.is-ready');
+    /** 지금 쪽 그림이 실제로 그려진 크기(칸 안에 맞춰 그림 — object-fit:contain) */
+    const drawn = () => page.evaluate(async () => {
+      const im = document.querySelector('.lp-slide.is-active img'); if (!im.complete) await new Promise((ok) => { im.onload = im.onerror = ok; });
+      const b = im.getBoundingClientRect(), ar = im.naturalWidth / im.naturalHeight, w = Math.min(b.width, b.height * ar);
+      return { page: +im.closest('.lp-slide').dataset.page, w: Math.round(w), h: Math.round(w / ar), box: [Math.round(b.width), Math.round(b.height)], over: document.documentElement.scrollWidth - innerWidth };
+    });
+    const p1 = await drawn();
+    assert.ok(p1.page === 1 && p1.w >= 330 && Math.abs(p1.box[0] / p1.box[1] - 16 / 9) < 0.05, '가로 쪽은 전과 같이 16:9 칸: ' + JSON.stringify(p1));
+    await page.click('[data-deck-next]'); await page.click('[data-deck-next]');
+    const p3 = await drawn();
+    assert.ok(p3.page === 3 && p3.w >= 330 && p3.over === 0, '세로 쪽(제자리): ' + JSON.stringify(p3));
+    assert.ok(Math.abs(p3.box[0] / p3.box[1] - 935 / 1210) < 0.02, '칸이 그 쪽 비율: ' + JSON.stringify(p3));
+    await page.click('[data-deck-full]');
+    await page.waitForFunction(() => document.fullscreenElement && document.fullscreenElement.matches('[data-deck]'));
+    const full = await drawn();
+    assert.ok(full.page === 3 && full.w >= 330 && full.h <= 844, '세로 쪽(전체 화면): ' + JSON.stringify(full));
+  });
+});
+
+test('브라우저(그려서 검수): 윤곽선 글자·바탕을 오린 글자는 안 보이는 글이 아니고, 화면 밖에 세워 둔 건너뛰기 링크는 잘린 글이 아님 — 정말 안 보이는 글·잘린 글은 그대로 알림', { skip }, async () => {
+  const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>검수</title><style>
+body{margin:0;padding:16px;background:#fff;color:#111;font:16px/1.5 sans-serif}p,a{margin:0 0 12px;display:block}
+.skip{position:absolute;left:-9999px;top:0}.skip:focus{left:8px}
+.num{font-size:72px;font-weight:800;line-height:1}
+#outline{color:transparent;-webkit-text-stroke:2px #111}
+#cliptext{color:transparent;background-color:#b33a1f;-webkit-background-clip:text;background-clip:text}
+#clipin{background-color:#14306b;-webkit-background-clip:text;background-clip:text}#clipin span{color:transparent}
+#ghost{color:transparent}
+#ghoststroke{color:transparent;-webkit-text-stroke-width:2px}
+#ghostclip{color:transparent;-webkit-background-clip:text;background-clip:text}
+#parked{position:absolute;left:-9999px;top:40px}
+#outlink{position:absolute;left:-9999px;top:80px}
+#wide{width:600px;white-space:nowrap}
+</style></head><body>
+<a class="skip" id="skip" href="#main">본문으로 건너뛰기</a>
+<main id="main">
+<p class="num" id="outline">01</p><p class="num" id="cliptext">02</p><p class="num" id="clipin"><span>03</span></p>
+<p class="num" id="ghost">04</p><p class="num" id="ghoststroke">05</p><p class="num" id="ghostclip">06</p>
+<p id="parked">화면 밖에 세워 둔 보통 글</p><a id="outlink" href="https://example.com/">화면 밖에 세워 둔 바깥 링크</a>
+<a id="wide" href="#main">화면보다 넓어 오른쪽이 잘리는 쪽 안 링크 화면보다 넓어 오른쪽이 잘리는 쪽 안 링크 화면보다 넓어</a>
+</main></body></html>`;
+  await withSite({ 'index.html': html }, async (page, base) => {
+    await page.goto(base);
+    const issues = await page.evaluate(`${K.inspectRenderedSource}({ file: 'index.html' })`);
+    const ids = (id) => issues.filter((x) => x.id === id).map((x) => x.where.selector).sort();
+    // 안 보이는 글: 윤곽선(01)·오린 글자(02·03)는 빼고, 그려지는 길이 없는 투명한 글(04 · 선 색도 투명한 05 · 오릴 바탕이 없는 06)은 그대로
+    assert.deepEqual(ids('invisible-text'), ['p#ghost', 'p#ghostclip', 'p#ghoststroke'], JSON.stringify(issues.filter((x) => x.id === 'invisible-text').map((x) => x.message_ko)));
+    // 잘린 글: 건너뛰기 링크는 빼고, 화면 밖의 보통 글·바깥 링크·오른쪽이 잘리는 쪽 안 링크는 그대로
+    assert.deepEqual(ids('clipped-text'), ['a#outlink', 'a#wide', 'p#parked'], JSON.stringify(issues.filter((x) => x.id === 'clipped-text').map((x) => x.message_ko)));
+    // 알림의 꼴은 그대로(앱의 그려서 검사가 같은 것을 씀)
+    const one = issues.find((x) => x.id === 'invisible-text');
+    assert.deepEqual(Object.keys(one).sort(), ['fix_hint_ko', 'id', 'level', 'message_ko', 'where']); assert.equal(one.level, 'error');
+    assert.match(one.message_ko, /글이 바탕과 거의 같은 색이라 안 보여요\(1\.00:1\)/);
+  });
 });

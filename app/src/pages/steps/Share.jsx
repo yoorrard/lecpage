@@ -18,17 +18,14 @@ import { reach } from '../../lib/netcheck.js';
 import { FEATURES, LIVE_KEYS, deployView, patchDeploy, isV2, featuresOf, siteFeatures, toggleFeature, ensureCode, printSiteHtml, carryPatch } from '../../lib/site-meta.js';
 import { duplicateProject } from '../../lib/project.js';
 import { keepPlan } from '../../lib/keep-dates.js';
+import { lecOnlyLive, consoleKeySource } from '../../lib/console-key.js';
 import { whenText } from '@engine/src/hero-meta.js';
 
 const same = (u) => String(u || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
 const LIVE_READY = (live, ok) => ['sheets', 'supabase', 'http'].includes(live?.provider) && live?.url && ok;
 const LIVE_NAME = { sheets: '구글 시트', supabase: 'Supabase', http: '참여 기능 서버' };
-const originOf = (u) => { try { return new URL(u).origin; } catch { return ''; } };
-/**
- * 바로 배포 서버가 맡은 참여 기능 방인지. 그 방은 바로 배포한 사이트 주소에서 온 요청만 받음(hosting/src/live/host.js liveOriginOk):
- * Vercel·GitHub Pages·Netlify·Cloudflare·ZIP으로 올린 사이트에 넣으면 질문·투표·출석이 보내지지 않음
- */
-export const lecOnlyLive = (live, srvLiveUrl = '') => live?.provider === 'http' && !!live.url && !!originOf(live.url) && [originOf(srvLiveUrl), originOf(PUBLISH_API)].includes(originOf(live.url));
+// 바로 배포 서버가 맡은 참여 기능 방인지(lecOnlyLive)와 강사 화면 관리자 키를 고르는 규칙은 lib/console-key.js에('내 연수' 목록과 함께 씀)
+export { lecOnlyLive };
 /** 대표 주소의 사이트에 참여 기능이 들어갔는지(배포할 때 적어 둔 표시. 예전 기록은 바로 배포 방이 있었으면 들어간 것으로) */
 export const siteHasLive = (d, t = d?.target) => { const s = d?.sites?.[t]; return s?.live === true || (s?.live === undefined && t === 'lecpage' && !!d?.lecpage?.adminKey); };
 
@@ -185,11 +182,12 @@ export function StepShare({ p, update, go }) {
   }, [lecSite?.id, bp?.live?.code]);
   useEffect(() => { const pt = ensureCode(p); if (pt) update(pt); }, []); // 참여 기능 방 코드(처음 한 번)
   useEffect(() => { if (goAgain) (goNow.current || again.current)?.(); }, [goAgain]);
-  // 고치기 화면의 [다시 배포하기]로 왔으면: 지난번 곳이 연결돼 있는 대로 바로 배포함(연결·바로 배포 서버 답을 읽는 동안 6초까지 기다림)
+  // 고치기 화면의 [다시 배포하기]로 왔으면: 지난번 곳이 연결돼 있는 대로 바로 배포함(연결·바로 배포 서버 답을 읽는 동안 9초까지 기다림).
+  // 배포할 곳 칸(Publish.jsx)이 서버 답을 8초까지 기다리므로 그보다 길게: 6초였을 때는 답이 늦는 망(내 계정에 배포한 연수)에서 기다리다 그만두고 화면만 내려갔음
   useEffect(() => {
     let id = ''; try { id = sessionStorage.getItem('lecpage:republish') || ''; sessionStorage.removeItem('lecpage:republish'); } catch { }
     if (id !== p.id) return;
-    let n = 0; const t = setInterval(() => { if (again.current) { clearInterval(t); again.current(); } else if (++n > 60) { clearInterval(t); document.querySelector('.publish')?.scrollIntoView({ block: 'center' }); } }, 100);
+    let n = 0; const t = setInterval(() => { if (again.current) { clearInterval(t); again.current(); } else if (++n > 90) { clearInterval(t); document.querySelector('.publish')?.scrollIntoView({ block: 'center' }); } }, 100);
     return () => clearInterval(t);
   }, []);
   // 연수 장소 확인(배포 전): 바로 배포면 그날 몫을 미리(상태 API 한 번). 배포 뒤에는 완료 카드의 '연수 전날 점검'이 접속 확인 QR·달력 일정을 줌
@@ -282,11 +280,14 @@ export function StepShare({ p, update, go }) {
     const w = recWait.current;
     if (w && mayAsk && p.deploy?.lastUrl) {
       if (recAsk.current) return; recAsk.current = true;
-      setProg({ step: '지난 기록을 확인하는 중', pct: 1 });
-      Promise.race([w, new Promise((ok) => setTimeout(() => ok(null), 5000))]).then((r) => {
-        recAsk.current = false; setProg(null);
+      // 기다리는 동안 '배포하는 중'으로 잠금: 그 사이 다른 곳 배포나 ZIP 다운로드를 시작하면 기다리던 배포가 뒤따라 함께 돌아 진행 줄·잠금이 서로를 지움.
+      // 답이 오든 5초가 지나든(받기가 실패해도) 반드시 풂. 이어서 배포하면 그 배포가 다시 잠금
+      setBusy(target); setProg({ step: '지난 기록을 확인하는 중', pct: 1 });
+      const after = (r) => {
+        recAsk.current = false; setProg(null); setBusy('');
         if (r && oldRecords(p, r)) setAskRoom(true); else pass(run, auto);
-      });
+      };
+      Promise.race([w, new Promise((ok) => setTimeout(() => ok(null), 5000))]).then(after, () => after(null));
       return;
     }
     if (old && mayAsk) { setAskRoom(true); return; }
@@ -693,8 +694,8 @@ function Success({ p, bp, update, onEdit, onRepublish, onPrimary, busy, onZip, i
   // 강사 화면 관리자 키: 바로 배포는 배포할 때 만든 키, 내 서버·시트는 연결할 때 앱이 만들어 이 기기에 기억한 키
   const [adminKey, setAdminKey] = useState('');
   const liveUrl = bp.live?.url || '';
-  // 바로 배포 방의 키. 바로 배포 사이트를 강사 서버로 바꿨으면 그 서버의 키
-  useEffect(() => { if (p.deploy.target === 'lecpage' && p.deploy.lecpage?.adminKey && (lecOnlyLive(bp.live) || !p.liveOk)) setAdminKey(p.deploy.lecpage.adminKey); else if (liveOn && p.liveOk) adminKeyFor(liveUrl, bp.live?.code || '').then(setAdminKey); else setAdminKey(''); }, [liveUrl, p.deploy.target, p.liveOk, liveOn, p.deploy.lecpage?.adminKey]);
+  // 바로 배포 방의 키. 바로 배포 사이트를 강사 서버로 바꿨으면 그 서버의 키(고르는 규칙은 lib/console-key.js — '내 연수' 목록의 [강사 화면]도 같은 규칙)
+  useEffect(() => { const src = consoleKeySource(p, bp.live, { liveOn }); if (src?.key) setAdminKey(src.key); else if (src?.url) adminKeyFor(src.url, src.code).then(setAdminKey); else setAdminKey(''); }, [liveUrl, p.deploy.target, p.liveOk, liveOn, p.deploy.lecpage?.adminKey]);
   const feats = bp.live?.features || [];
   // 받는 사람이 할 일 한 줄: 출석이 있으면 도착해서 [출석], 아니면 연수 중에 질문·참여
   const todo = feats.includes('attendance') ? '\n도착하면 이 사이트에서 [출석]을 눌러 주세요.' : liveOn ? '\n연수 중에 이 사이트로 질문하고 참여해요.' : '';

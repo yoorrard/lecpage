@@ -26,10 +26,11 @@
   -webkit-text-size-adjust:100%;
 }
 /* 강조색 위 글자(주 단추·누른 공감·고른 별점): 강조색의 밝기(WCAG 상대 휘도)로 흰색·검정을 고름 → 어두운 모드에서 --lp-accent를 밝게 바꿔도 4.5:1 이상.
-   --lp-on-accent를 주면 그 색. 상대 색 문법을 모르는 옛 브라우저는 조립이 연수 정보 theme로 정한 --lpk-on-accent */
+   --lp-on-accent를 주면 그 색. 상대 색 문법을 모르는 옛 브라우저는 조립이 연수 정보 theme로 정한 --lpk-on-accent.
+   끝의 '/ 1': 글자는 늘 불투명하게(상대 색은 바탕색의 투명도를 물려받음 — 반투명 글자색만 정한 사이트에서 단추 글자까지 반투명해져 대비가 떨어졌음) */
 @supports (color:color(from red srgb-linear r g b)){
   .lpk{
-    --_on-auto:color(from var(--_acf) srgb-linear clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1) clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1) clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1));
+    --_on-auto:color(from var(--_acf) srgb-linear clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1) clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1) clamp(0,(.1791 - (.2126*r + .7152*g + .0722*b))*1e6,1) / 1);
     --_on:var(--lp-on-accent,var(--_on-auto,var(--lpk-on-accent,Canvas)));
   }
 }

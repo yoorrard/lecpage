@@ -216,8 +216,10 @@ export function Publish({ p, busy, setBusy, prog, setProg, buildFiles, guard, do
     let off = false;
     connectedTargets().then((c) => { if (!off) setConnected(c); });
     // 끊긴 동안에는 서버에 묻지 않음: 물어도 실패라 '이 망에서 닿지 않아요'로 바뀌고 배포할 곳이 다른 곳으로 넘어감(배포가 도는 중에 끊기면 누를 곳이 눈앞에서 바뀜).
-    // 받아 둔 답은 그대로 두고, 다시 이어지면 물음(답을 받은 적이 없으면 그때까지 '확인하는 중')
-    if (!online) { setInfoWait(false); return () => { off = true; }; }
+    // 받아 둔 답은 그대로 두고, 다시 이어지면 물음(답을 받은 적이 없으면 그때까지 '확인하는 중').
+    // 끊긴 채 이 화면을 열었어도 다시 이어지면 새로 물음(first를 여기서 끔): 끊긴 동안 다른 곳이 물어 실패한 답이 10초쯤 기억돼 있어,
+    // 그것을 다시 쓰면 방금 이어진 망에서 '이 망에서 바로 배포 서버에 닿지 않아요'가 뜨고 이 화면을 다시 열 때까지 그대로였음
+    if (!online) { first.current = false; setInfoWait(false); return () => { off = true; }; }
     if (instant === null && PUBLISH_API) setInfoWait(true);
     const t = setTimeout(() => { if (!off) setInfoWait(false); }, 8500);
     // false: 바로 배포를 켠 앱인데 이 망에서 서버에 닿지 않음
@@ -502,8 +504,9 @@ function Undeploy({ p, target, info, records, done, onClose }) {
     try {
       let more = null, gone = false;
       if (lec) {
-        // 서버에 이미 없는 사이트(먼저 취소했거나 보관 기간이 끝남 — 404): 주소는 이미 닫혀 있으므로 실패가 아님. 목록에서 지우고 그렇게 알림
-        try { await deleteInstant(lec); } catch (e) { if (e.status !== 404) throw e; gone = true; }
+        // 서버에 이미 없는 사이트(먼저 취소했거나 보관 기간이 끝남 — 404): 주소는 이미 닫혀 있으므로 실패가 아님. 목록에서 지우고 그렇게 알림.
+        // 바로 배포 서버가 직접 준 답(JSON의 code 'not_found')일 때만: 중간 장비나 다른 서버가 준 404로는 열려 있는 사이트의 기록(주소·관리자 키)을 지우지 않고 보통 실패로 알림
+        try { await deleteInstant(lec); } catch (e) { if (!(e.status === 404 && e.code === 'not_found')) throw e; gone = true; }
         if (lec.adminKey && bp.live?.provider === 'http' && sameUrl(bp.live?.url, lecUrl)) more = { live: { provider: 'local', url: '', anonKey: '' }, liveOk: false };
       } else if (viaCf && !listOnly) {
         const out = await R.run(({ onView, signal }) => cfRun('delete', { name: cfSite.name, relay: cfRelay && withRelay }, { onView, signal }));

@@ -22,7 +22,7 @@
 | 문의처가 없을 때 | 참가자가 연락할 곳은? 강사 이메일 / 담당자 연락처 / 없음 | `contact` |
 | 기관 설문을 따로 쓸 때 | 설문 주소(구글 설문 등)가 있나요? | `lecpage.teacher.json` `surveyUrl` |
 | 교재 파일을 나눠 줄 때 | 교재 PDF 내려받기를 허용할까요? | 허용하면 `site/files/`에 넣고 자료실 자리 표시 |
-| 배포할 때 | 누가 볼 수 있게 할까요? 주소를 받은 사람만(기본) / 누구나 검색으로 | `lecpage.teacher.json` `access`: link·public |
+| 배포할 때 | 누가 볼 수 있게 할까요? 주소를 받은 사람만(기본) / 암호를 아는 사람만 / 누구나 검색으로 | `lecpage.teacher.json` `access`: link·password·public(암호는 파일에 적지 않고 `pack`·`publish`에 `--password`로, `references/cli.md` 3절) |
 
 연수 목표·강의 흐름은 묻지 않아요. 교재에서 읽어 설계하고, 건넬 때 "이렇게 구성했어요"로 확인받아요.
 

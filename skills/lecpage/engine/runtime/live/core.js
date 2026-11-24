@@ -975,13 +975,23 @@
     };
     p.nickname = this._mask(p.nickname) || '참가자' + String(Math.floor(Math.random() * 900) + 100);
     if (this._me && this._me.token && !profile.force) {
-      if (p.nickname && p.nickname !== this._me.nickname && profile.nickname) {
-        return this.update('participants', this._me.id, { nickname: p.nickname }).then(function () {
-          self._me.nickname = p.nickname; self._idStore.set(self._ns + ':me', self._me); return { id: self._me.id, token: self._me.token };
+      var patch = {}, have = this.get('participants', this._me.id) || {};
+      if (p.nickname && p.nickname !== this._me.nickname && profile.nickname) patch.nickname = p.nickname;
+      // 이미 참여한 기기(반응처럼 창 없이 저절로 참여한 뒤)가 입실·퇴실 창에서 이름·소속·동의를 적음: 가진 것과 다르면 함께 보냄.
+      // 전에는 이 값을 버려, 이름을 적고 동의했는데도 출석이 이름 없는 '참가자NNN' 줄로 남았음
+      if (p.name && p.name !== have.name) patch.name = p.name;
+      if (p.school && p.school !== have.school) patch.school = p.school;
+      var named = patch.name !== undefined || patch.school !== undefined;
+      if (named) patch.consent = p.consent;
+      if (patch.nickname !== undefined || named) {
+        return this.update('participants', this._me.id, patch).then(function () {
+          if (patch.nickname !== undefined) { self._me.nickname = patch.nickname; self._idStore.set(self._ns + ':me', self._me); }
+          return { id: self._me.id, token: self._me.token };
         }, function (err) {
           // 서버가 별명을 거절했으면(쓸 수 없는 별명·너무 김 등 4xx) 그대로 알림: 창이 오류 없이 닫히고 글이 '참가자123'으로 올라가지 않게.
-          // 서버에 닿지 못한 것(연결 끊김·5xx)은 예전처럼 넘어감(글은 연결되면 보냄)
-          if (err && err.status >= 400 && err.status < 500) throw err;
+          // 서버에 닿지 못한 것(연결 끊김·5xx)은 예전처럼 넘어감(글은 연결되면 보냄).
+          // 이름·소속은 서버가 받지 못했으면(5xx 포함) 늘 알림: 넘어가면 출석이 이름 없이 남음(연결이 끊긴 것은 대기열에 들어가 여기로 오지 않음)
+          if (err && err.status >= 400 && (named || err.status < 500)) throw err;
           return { id: self._me.id, token: self._me.token };
         });
       }

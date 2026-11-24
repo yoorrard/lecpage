@@ -228,10 +228,19 @@ export async function prepareCmd(h) {
     const own = pages.filter((p) => p.fileId === f.id);
     return { name: f.name, type: f.type || '', unit: f.unit || '', pages: own.length, images: given?.sets?.some((x) => x.owner === f.name && !x.mapped) ? given.sets.filter((x) => x.owner === f.name).reduce((n, x) => n + x.count, 0) : given && given.owner === f.name && !given.mapped ? givenList.length : own.filter((p) => p.image).length, ...(f.renderOf ? { twin: true } : {}), ...(own.some((p) => p.pdfText) ? { text: true } : {}) };
   });
+  // 알리는 쪽 수 = 사이트에 놓이는 쪽: 슬라이드·PDF는 읽은 쪽 수, 문서형(워드·한글·글: 읽은 단위는 제목으로 나눈 '부분')은 그 교재의 쪽 그림 수.
+  // 부분은 쪽이 아니라서 쪽 수에 넣지 않고(워드 5개 부분 + 쪽 그림 1장을 '5쪽'이라 하지 않게), 쪽 그림이 없는 문서형 교재는 '글로 읽은 교재'로 따로 알림.
+  // 받은 쪽 그림이 어느 교재 것인지 모를 때(교재에 맞추지 못한 그림이 남음)는 그림 수를 쪽 수로 보고, 어느 교재에 그림이 없다고 하지 않음
+  const assigned = files.reduce((n, f) => n + f.images, 0);
+  const total = Math.max(files.reduce((n, f) => n + (f.unit === 'section' ? f.images : f.pages), 0), images);
+  const textOnly = images > assigned ? [] : files.filter((f) => f.unit === 'section' && !f.images && f.pages);
+  const missing = total - images; // 쪽 그림이 없는 슬라이드·PDF 쪽(숨긴 슬라이드, 그리지 못한 쪽, --no-slides)
+  const count = !total ? '' : !missing ? `교재 ${total}쪽(쪽 그림 site/material/${last !== images ? '' : last > 1 ? `p-001~p-${pad3(last)}` : 'p-001'})` : `교재 ${total}쪽 · 쪽 그림 ${images}장(site/material/)`;
+  const asText = textOnly.length ? `글로 읽은 교재 ${textOnly.map((f) => `${f.name} ${f.pages}개 부분`).join(', ')}(쪽 그림 없음)` : '';
   say([
-    `준비 ${rel(work)}: 교재 ${pages.length}쪽 · 쪽 그림 ${images}장(site/material/)${md ? ' · 보조 글자 material.md(PDF가 아닌 교재)' : ''}${links ? ' · 링크 주소 links.md' : ''}`,
+    `준비 ${rel(work)}: ${[count, asText].filter(Boolean).join(' · ')}${md ? ' · 보조 글자 material.md(PDF가 아닌 교재)' : ''}${links ? ' · 링크 주소 links.md' : ''}`,
     ...unread.map((u) => `주의 ${u.name}: 읽지 못했어요(이 교재는 빠졌어요). ${u.message_ko}`),
-    !given && images < pages.length && !args['no-slides'] && !(m.warnings || []).some((w) => w.code === 'render-failed') ? `주의 쪽 그림을 ${pages.length - images}쪽 만들지 못했어요(LibreOffice·pdftoppm 확인: lecpage.mjs doctor).` : '',
+    !given && (missing > 0 || textOnly.length) && !args['no-slides'] && !(m.warnings || []).some((w) => w.code === 'render-failed') ? `주의 ${missing > 0 ? `쪽 그림을 ${missing}쪽 만들지 못했어요` : `${textOnly.map((f) => f.name).join(', ')}의 쪽 그림을 만들지 못했어요`}(LibreOffice·pdftoppm 확인: lecpage.mjs doctor).` : '',
     !given && noImg.length && images ? `쪽 그림이 없는 쪽은 material.md의 글로 읽어요(${noImg.slice(0, 3).map((p) => p.page).join('·')}${noImg.length > 3 ? '…' : ''}쪽).` : '',
     ...(m.warnings || []).filter((w) => w.code !== 'python-fallback').slice(0, 3).map((w) => `주의 ${w.file ? `${w.file}: ` : ''}${w.message_ko}`),
     `다음 교재 원본·쪽 그림 읽기 → ${rel(join(work, 'site'))}/index.html·${rel(join(work, 'lecpage.json'))} 쓰기 → check ${rel(work)} (이 작업의 경로 요약: ${rel(join(work, 'README.md'))})`,
@@ -266,7 +275,8 @@ async function assembleWork(h, work, extra = {}) {
   const site = readSite(N, siteDir);
   const metaRaw = readFileSync(join(work, 'lecpage.json'), 'utf8');
   const prevPath = join(work, 'lecpage.teacher.json'); // 강사 값(공개 범위·주소·참여 서버): CLI가 따로 둠
-  const prev = existsSync(prevPath) ? readJson(prevPath) : null;
+  // extra.prev: 강사 값을 바꿔 조립할 때(serve --live가 참여 기능 서버를 '같은 주소'로 둠). 없으면 파일 그대로
+  const prev = extra.prev || (existsSync(prevPath) ? readJson(prevPath) : null);
   let material = null; try { material = { pages: JSON.parse(readFileSync(join(work, '.lecpage', 'pages.json'), 'utf8')) }; } catch { /* 없음 */ }
   const r = K.assemble(site, metaRaw, { runtime: N.nodeRuntime(), prev, today: h.args.today, material, materials: unlistedFiles(site), ...(extra.host ? { host: extra.host } : {}) });
   return { K, site, metaRaw, prev, r };
@@ -294,18 +304,40 @@ function writeDist(N, work, files) {
   N.writeFiles(dist, files);
   return dist;
 }
+/**
+ * 공개 범위가 암호인데 work/dist에 잠그지 않은 사이트(암호를 정하기 전에 조립한 것)가 남아 있으면 비움: 그 폴더를 그대로 올리면 암호 없이 열리므로.
+ * 잠근 사이트(pack·publish --password가 만든 것: 첫 쪽에 lp-locked)는 그대로 둠 → 비웠으면 true
+ */
+function dropPlainDist(work) {
+  const dist = join(work, 'dist'), first = join(dist, 'index.html');
+  if (!existsSync(first) || /id="lp-locked"/.test(readFileSync(first, 'utf8'))) return false;
+  for (const n of readdirSync(dist)) if (!n.startsWith('.') && !KEEP_IN_DIST.has(n)) rmSync(join(dist, n), { recursive: true, force: true });
+  return true;
+}
 
 /**
  * v2 작업 폴더 조립 → work/dist(올릴 사이트) + work/dist-강사용/운영안내.md(올리지 않음). publish·pack·app·serve·handouts가 함께 씀
  * @param o.fonts 글꼴 함께 담기(사이트가 쓰는 글꼴 CDN의 글꼴을 쓰인 글자만 사이트 안으로: 학교망이 CDN을 막아도 같은 글꼴, 못 받으면 CDN 그대로)
  * @param o.password 암호로 잠그기(쪽·교재 쪽 그림·자료실 파일, 접속 확인·개인정보 안내만 열어 둠). 공개 범위가 password인데 암호가 없으면 오류
  * @param o.host 배포할 곳(decide/infra.js HOSTS id: cloudflare·onpod·vercel·github-pages·netlify·lan·zip …). 개인정보 안내·운영안내가 그 방식에 맞게
- * @returns { ok, errors, dist, tdir, r(assemble 결과), K, site, metaRaw, notes:[한 줄], access }
+ * @param o.plain 공개 범위가 password인데 암호가 없어도 멈추지 않음(check·preview: 살펴보는 데는 암호가 필요 없음). 잠그기 전 사이트를
+ *   work/.lecpage/check-site에만 쓰고(dist가 그 폴더), 올리는 work/dist에는 잠그지 않은 사이트를 두지 않음(있던 것은 비움) → needsPassword: true
+ * @returns { ok, errors, dist, tdir, r(assemble 결과), K, site, metaRaw, notes:[한 줄], access, needsPassword?, cleared? }
  */
-export async function buildWorkV2(h, work, { fonts = false, password = '', host = '' } = {}) {
+export async function buildWorkV2(h, work, { fonts = false, password = '', host = '', plain = false } = {}) {
   const a = await assembleWork(h, work, { host });
   if (a.r.errors?.length) return { ok: false, errors: a.r.errors, ...a };
-  if (a.r.meta.access === 'password' && !password) return { ok: false, errors: [{ code: 'password', message_ko: '공개 범위가 암호(lecpage.teacher.json access: password)예요. --password 값이나 LECPAGE_PASSWORD 환경 변수를 주세요.' }], ...a };
+  const needsPassword = a.r.meta.access === 'password' && !password;
+  if (needsPassword && !plain) return { ok: false, errors: [{ code: 'password', message_ko: '공개 범위가 암호(lecpage.teacher.json access: password)예요. --password 값이나 LECPAGE_PASSWORD 환경 변수를 주세요.' }], ...a };
+  if (needsPassword) {
+    const dir = join(work, '.lecpage', 'check-site');
+    rmSync(dir, { recursive: true, force: true }); h.N.writeFiles(dir, a.r.files);
+    const cleared = dropPlainDist(work);
+    const tdir = join(work, 'dist') + '-강사용';
+    if (a.r.teacher && Object.keys(a.r.teacher).length) h.N.writeFiles(tdir, a.r.teacher);
+    h.saveState(work, { v: 2, out: 'dist' });
+    return { ok: true, dist: dir, tdir, notes: [], access: 'password', needsPassword: true, cleared, ...a };
+  }
   let files = a.r.files;
   const notes = [];
   if (fonts) {
@@ -334,7 +366,8 @@ export async function checkCmd(h) {
   // 배포할 곳: --host, 없으면 지난번에 배포한 곳(개인정보 안내·운영안내가 그 방식에 맞게)
   const st = h.loadState(work);
   const host = String(args.host || st.deploy?.host || st.hostHint || '');
-  const { K, site, metaRaw, r, dist } = await buildWorkV2(h, work, { host });
+  // 살펴보는 데는 암호가 필요 없음(plain): 공개 범위가 암호면 잠그기 전 사이트를 검수용 폴더에 두고 봄. 암호는 pack·publish에서 받음
+  const { K, site, metaRaw, r, dist, needsPassword, cleared } = await buildWorkV2(h, work, { host, plain: true });
   if (r.errors?.length) { say(r.errors.map((e) => `오류 ${e.message_ko}`), { ok: false, errors: r.errors }); process.exit(1); }
   const issues = K.inspect(site, metaRaw).map((x) => ({ ...x, where: { ...x.where, file: x.where.file && !x.where.file.startsWith('lecpage') ? 'site/' + x.where.file : x.where.file } }));
   const checkDir = join(work, 'check'); rmSync(checkDir, { recursive: true, force: true }); mkdirSync(checkDir, { recursive: true });
@@ -388,6 +421,7 @@ export async function checkCmd(h) {
   const line = (x) => `${x.level === 'error' ? '고칠 곳' : '살펴볼 곳'} ${x.where.file}${x.where.selector ? ' ' + x.where.selector : ''}${x.where.width ? ` (${x.where.width}px)` : ''}: ${x.message_ko}`;
   say([
     `조립 ${rel(dist)}: 쪽 ${r.report.pages.length} · 파일 ${r.report.files}개 · ${r.report.sizeKB}KB · 참여 기능 ${r.report.live === 'none' ? '없음' : `${r.report.live}(${r.report.features.join(',')})`}`,
+    needsPassword ? `공개 범위 암호(lecpage.teacher.json access: password)라 잠그기 전 사이트를 살펴봤어요. 올릴 ${rel(join(work, 'dist'))}는 pack·publish에 --password(또는 LECPAGE_PASSWORD)를 줄 때 잠가서 만들어요.${cleared ? ` 잠그지 않은 예전 ${rel(join(work, 'dist'))}는 비웠어요.` : ''}` : '',
     r.collected ? `키트 투표 ${r.collected.polls.length} · 실습 단계 ${r.collected.steps.length} · 교재 쪽 ${r.collected.deck.length}${r.collected.untitled?.length ? `(제목 없는 쪽 ${r.collected.untitled.length}: ${r.collected.untitled.slice(0, 6).join('·')}${r.collected.untitled.length > 6 ? '…' : ''} → 필요하면 lecpage.json pages)` : ''} · 질문 ${r.collected.qa ? '있음' : '없음'} · 보드 ${r.collected.board.length} · 설문 ${r.collected.survey.length}` : '',
     `검수 ${K.issueSummary(all)}${r.report.droppedPages?.length ? ` · 안 쓰는 교재 쪽 그림 ${r.report.droppedPages.length}장은 배포에서 뺌` : ''}`,
     ...(r.preflight || []).map((x) => `배포 전 확인 ${x.message_ko}`),
@@ -396,7 +430,7 @@ export async function checkCmd(h) {
     r.warnings.length ? `조립 알림 ${r.warnings.length}: ${r.warnings.slice(0, 3).map((w) => w.message_ko).join(' / ')}` : '',
     shots.length ? `화면 그림 ${shots.map((s) => rel(s)).join(' · ')}(전체)` : '',
     tiles.length ? `나눠 본 그림 ${rel(join(checkDir, 'tiles'))}/ ${tiles.length}장(<쪽>-390-01.png부터, 위에서 아래로) — 첫 장과 고친 곳 둘레를 직접 열어 봐요${tileCut.length ? ` · ${tileCut.join('·')}는 앞 12장까지만이라 그 아래(설문·마무리 등)는 전체 그림(<쪽>-390.png·-1280.png)에서 봐요` : ''}` : '', browserNote,
-  ], { ok: !errors.length, dist, issues: all, warnings: r.warnings, shots, tiles, report: r.report });
+  ], { ok: !errors.length, dist, issues: all, warnings: r.warnings, shots, tiles, report: r.report, ...(needsPassword ? { needsPassword: true } : {}) });
   process.exitCode = errors.length ? 1 : 0;
 }
 
@@ -405,12 +439,12 @@ export async function previewCmd(h) {
   const { args, staticServer, say } = h;
   const work = resolve(args._[0] || 'work');
   if (args.live) return liveServe(h, work);
-  const { r, dist } = await buildWorkV2(h, work);
+  const { r, dist, needsPassword } = await buildWorkV2(h, work, { plain: true }); // 공개 범위가 암호여도 이 컴퓨터에서 보는 미리보기는 잠그기 전 사이트로(check와 같음)
   if (r.errors?.length) { say(r.errors.map((e) => `오류 ${e.message_ko}`), { ok: false, errors: r.errors }); process.exit(1); }
   const port = +args.port || 4173;
   const u = `http://localhost:${port}/`;
   staticServer(dist).listen(port, args.host || '127.0.0.1', () => {
-    say([`미리보기: ${u}  (끝내려면 Ctrl+C${args.host ? '' : ' · 같은 와이파이의 다른 기기에서 보려면 --host 0.0.0.0'})`, `${existsSync(join(dist, 'console.html')) ? `강사 화면 ${u}console.html · ` : ''}발표 화면 ${u}screen.html · QR 안내문 ${u}poster.html`, r.report.live === 'local' ? '참여 기능은 연습 모드예요(이 브라우저 안에서만 이어져요).' : '', r.warnings.length ? `조립 알림 ${r.warnings.length}개 — check로 자세히` : ''], { ok: true, url: u, dist });
+    say([`미리보기: ${u}  (끝내려면 Ctrl+C${args.host ? '' : ' · 같은 와이파이의 다른 기기에서 보려면 --host 0.0.0.0'})`, `${existsSync(join(dist, 'console.html')) ? `강사 화면 ${u}console.html · ` : ''}발표 화면 ${u}screen.html · QR 안내문 ${u}poster.html`, needsPassword ? '공개 범위가 암호예요. 미리보기는 잠그기 전 사이트이고, 올릴 사이트는 pack·publish에 --password를 줄 때 잠가요.' : '', r.report.live === 'local' ? '참여 기능은 연습 모드예요(이 브라우저 안에서만 이어져요).' : '', r.warnings.length ? `조립 알림 ${r.warnings.length}개 — check로 자세히` : ''], { ok: true, url: u, dist });
   });
 }
 

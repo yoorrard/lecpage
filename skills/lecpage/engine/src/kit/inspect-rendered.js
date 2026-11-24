@@ -104,6 +104,9 @@ export function inspectRendered(opts) {
     // 화면 밖으로 잘린 글(가로)
     if (!chrome && cs.position !== 'fixed' && (r.left < -1 || r.right > W + 1) && r.width < W * 3) {
       var clipped = false; for (var p = el.parentElement; p && p !== doc.body; p = p.parentElement) { var pc = win.getComputedStyle(p); if (/(auto|scroll)/.test(pc.overflowX)) { clipped = true; break; } }
+      // '본문으로 건너뛰기' 링크: 쪽 안 주소(#…)로 가는 링크를 초점이 올 때까지 화면 밖에 세워 둔 것(position:absolute·fixed, 통째로 화면 밖)은 잘린 글이 아님
+      var skipA = el.closest('a[href^="#"]');
+      if (skipA && !clipped && /^(absolute|fixed)$/.test(win.getComputedStyle(skipA).position)) { var ar = skipA.getBoundingClientRect(); if (ar.right <= 0 || ar.left >= W) clipped = true; }
       if (!clipped) add('clipped-text', 'warn', el, '"' + el.textContent.trim().slice(0, 30) + '" 글이 화면 밖으로 잘려요.', '이 글의 상자 폭을 화면 안으로(max-width:100%) 줄이거나 줄바꿈되게 해 주세요.');
     }
     // 상자보다 긴 글(넘침 숨김)
@@ -112,7 +115,18 @@ export function inspectRendered(opts) {
     if (small && fs < 12 && !el.closest('svg,[aria-hidden="true"]') && el.textContent.trim().length > 1 && seenSmall++ < 40) add('small-text', 'warn', el, '휴대폰에서 글자가 ' + fs.toFixed(1) + 'px로 너무 작아요("' + el.textContent.trim().slice(0, 24) + '").', '휴대폰 폭에서는 글자를 12px(가능하면 14px) 이상으로 해 주세요.');
     // 안 보이는 글(글자색 ≈ 바탕)
     var fg = rgba(cs.color), bg = bgOf(el);
-    if (fg && bg && !el.closest('svg') && !isMoving(el)) {
+    // 속을 비운 글자(글자색이 투명)가 다른 길로 그려지면 색 검사를 건너뜀: 윤곽선 글자(-webkit-text-stroke: 굵기가 있고 선 색이 투명하지 않음),
+    // 바탕을 글자 모양으로 오린 글자(background-clip:text인 제 요소·윗 요소에 칠한 바탕이 있음). 둘 다 아닌 투명한 글은 정말 안 보이므로 그대로 알림
+    var drawn = false;
+    if (fg && fg[3] < 0.01) {
+      var sc = rgba(cs.webkitTextStrokeColor);
+      if (parseFloat(cs.webkitTextStrokeWidth) > 0 && sc && sc[3] > 0.01) drawn = true;
+      for (var q = el; !drawn && q && q.nodeType === 1; q = q.parentElement) {
+        var qc = win.getComputedStyle(q), qb = rgba(qc.backgroundColor);
+        if (/\btext\b/.test((qc.webkitBackgroundClip || '') + ' ' + (qc.backgroundClip || ''))) { drawn = (qc.backgroundImage && qc.backgroundImage !== 'none') || !!(qb && qb[3] > 0.01); break; }
+      }
+    }
+    if (fg && bg && !drawn && !el.closest('svg') && !isMoving(el)) {
       var c = ratio(over(fg, bg), bg), big = fs >= 24 || (fs >= 18.66 && +cs.fontWeight >= 700);
       if (c < 1.6) add('invisible-text', 'error', el, '"' + el.textContent.trim().slice(0, 30) + '" 글이 바탕과 거의 같은 색이라 안 보여요(' + c.toFixed(2) + ':1).', '글자색이나 바탕색을 바꿔 4.5:1 이상으로 맞춰 주세요.');
       else if (c < (big ? 3 : 4.5)) add('low-contrast', 'warn', el, '"' + el.textContent.trim().slice(0, 30) + '" 글의 대비가 ' + c.toFixed(2) + ':1이에요(' + (big ? '큰 글은 3' : '4.5') + ':1 이상).', '글자색을 더 진하게(밝은 바탕) 또는 더 밝게(어두운 바탕) 해 주세요.');

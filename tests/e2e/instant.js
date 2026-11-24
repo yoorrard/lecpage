@@ -27,10 +27,14 @@ async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarg
     }
     if (u.pathname === '/api/sites' && m === 'POST') { st.sites = (st.sites || 0) + 1; return json({ id: 'site' + st.sites, key: 'k' + st.sites, url: `https://s-site${st.sites}.example.pages.dev/`, expiresAt: Date.now() + 60 * 864e5 }); }
     if (/^\/api\/sites\/site\d+$/.test(u.pathname) && m === 'DELETE') {
-      // st.gone: 서버에 이미 없는 사이트(먼저 취소했거나 보관 기간이 끝남)
-      if (st.gone) return r.fulfill({ status: 404, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ ok: false, error: 'not_found', message: '사이트를 찾지 못했어요. 보관 기간이 끝났을 수 있어요.' }) });
+      // st.notOurs: 바로 배포 서버의 답이 아닌 404(중간 장비나 다른 서버가 준 글). 앱은 이것으로 '이미 내려간 사이트'라고 보면 안 됨(열려 있는 사이트의 기록을 지우게 됨)
+      if (st.notOurs) return r.fulfill({ status: 404, headers: { ...cors, 'content-type': 'text/plain' }, body: 'Not Found' });
+      // st.gone: 서버에 이미 없는 사이트(먼저 취소했거나 보관 기간이 끝남). 서버가 주는 오류 모양 그대로({ error: { code, message_ko } } — hosting/src/http.js)
+      if (st.gone) return json({ error: { code: 'not_found', message_ko: '사이트를 찾지 못했어요. 보관 기간이 끝났을 수 있어요.' } }, 404);
       st.deleted = (st.deleted || 0) + 1; return r.fulfill({ status: 204, headers: cors });
     }
+    // st.recHold: 지난 기록 수(/records)의 답을 시험이 풀어 줄 때까지 붙잡아 둠(기록 답이 늦는 때). 없으면 아래의 404(기록을 모름)
+    if (st.recHold && /^\/api\/sites\/[^/]+\/records$/.test(u.pathname) && m === 'GET') { await st.recHold; return json({ live: false }); }
     if (/\/deploys$/.test(u.pathname) && tooLarge) return json({ error: { code: 'too_large', message_ko: TOO_LARGE } }, 413);
     // st.gone: 보관 기간이 끝나 지워진 사이트(그 사이트에 올리려 하면 404) · st.failPublish: 다음 N번의 공개가 서버 오류(시험이 도중에 켬)
     if (/\/deploys$/.test(u.pathname) && st.gone?.has(u.pathname.split('/')[3])) return json({ error: { code: 'not_found', message_ko: '없는 사이트예요.' } }, 404);
@@ -146,6 +150,32 @@ async function seed(p, script) {
     await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
     await p.waitForSelector('.success .big-url', { timeout: 60000 });
     L.ok('redeploy after cancel works (new site)', st.sites === 2 && /s-site2\./.test(await p.locator('.success .big-url').innerText()), `sites ${st.sites}`);
+    // 고치기 화면의 [다시 배포하기]로 왔을 때(시험은 그 표시만 남기고 새로 고침) —
+    //  ⓐ 서버 답(/api/info)이 7초 걸려도 기다렸다가 저절로 배포를 시작함: 배포할 곳 칸이 답을 8초까지 기다리는데 이쪽은 6초에 그만둬, 화면만 내려가고 배포는 시작되지 않았음
+    //  ⓑ 지난 기록 수를 받는 동안(답이 늦음)에는 '배포하는 중'으로 잠김: 그 사이 다른 곳 배포·ZIP을 시작하면 기다리던 배포가 뒤따라 함께 돌았음
+    {
+      const pubs = () => st.calls.filter((c) => /\/publish$/.test(c)).length; const had = pubs();
+      let release; st.recHold = new Promise((res) => { release = res; }); st.infoDelay = 7000;
+      await p.evaluate((id) => sessionStorage.setItem('lecpage:republish', id), L.pidOf(p));
+      await p.reload({ waitUntil: 'load' });
+      const fired = await p.waitForFunction(() => /지난 기록을 확인하는 중/.test(document.querySelector('.publish')?.textContent || ''), null, { timeout: 15000 }).then(() => true, () => false);
+      const lock = await p.evaluate(() => ({ modes: [...document.querySelectorAll('.publish .pub-mode')].map((x) => x.disabled), big: document.querySelector('.publish .btn-lg')?.disabled === true }));
+      L.ok('[다시 배포하기] from the edit screen: starts by itself even when the server answer takes 7s', fired, (await p.locator('.publish').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 100));
+      L.ok('while the record count is still loading: locked as "deploying" (no other deploy can start)', fired && lock.modes.length === 2 && lock.modes.every(Boolean) && lock.big, JSON.stringify(lock));
+      st.infoDelay = 0; release(); st.recHold = null;
+      await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 8000 }).then((x) => x.click()).catch(() => {});
+      for (let i = 0; i < 100 && pubs() < had + 1; i++) await p.waitForTimeout(200);
+      await p.waitForFunction(() => document.querySelectorAll('.publish .pub-mode:not([disabled])').length === 2, null, { timeout: 15000 }).catch(() => {});
+      L.ok('after the wait: one redeploy on the same site, and the lock is released', pubs() === had + 1 && st.sites === 2 && await p.locator('.publish .pub-mode:not([disabled])').count() === 2, `publishes ${pubs() - had}, sites ${st.sites}`);
+    }
+    // 바로 배포 서버의 답이 아닌 404(JSON이 아닌 글): '이미 내려간 사이트'로 보지 않음 — 기록(주소·관리자 키)을 그대로 두고 실패로 알림
+    st.notOurs = true;
+    await p.click('.sites .sites-x'); await p.waitForSelector('dialog[open]:has-text("배포를 취소할까요")', { timeout: 10000 });
+    await p.click('dialog[open] button.btn-danger');
+    const refused = await p.waitForSelector('dialog[open] [role=alert]', { timeout: 10000 }).then((x) => x.innerText(), () => '');
+    L.ok('cancel answered by a 404 that is not the server\'s own → record and done card kept, failure shown (not "already down")', !!refused && await p.locator('.sites .sites-x').count() === 1 && await p.locator('.success .big-url').count() === 1 && !/이미 내려간 사이트예요/.test((await p.locator('.toast').allInnerTexts()).join(' ')), refused.replace(/\s+/g, ' ').slice(0, 80) || '(no failure shown)');
+    st.notOurs = false;
+    await p.click('dialog[open] button:has-text("닫기")').catch(() => {}); await p.waitForTimeout(300);
     // 서버에 이미 없는 사이트의 [배포 취소]: '찾지 못했어요'로 막히지 않고 목록에서 지워짐(주소는 이미 닫혀 있음)
     st.gone = true;
     await p.click('.sites .sites-x'); await p.waitForSelector('dialog[open]:has-text("배포를 취소할까요")', { timeout: 10000 });
@@ -292,6 +322,19 @@ async function seed(p, script) {
     await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
     await p.waitForSelector('.success .big-url', { timeout: 60000 });
     L.ok('back online: [다시 배포] finishes on the same site (no second site)', st.sites === 1 && /s-site1\./.test(await p.locator('.success .big-url').innerText()), `sites ${st.sites}`);
+    // 끊긴 채 배포하기 화면을 열었다가 곧(10초 안) 다시 이어짐: 끊긴 동안 실패한 답(10초쯤 기억됨)을 다시 쓰지 않고 서버에 새로 물음.
+    // 전에는 방금 이어진 망에서 '이 망에서 바로 배포 서버에 닿지 않아요 · 핫스팟'이 뜨고 이 화면을 다시 열 때까지 그대로였음
+    await p.evaluate(() => { location.hash = location.hash.replace(/\/3$/, '/2'); }); await p.waitForTimeout(500);
+    await p.evaluate(() => { const now = Date.now; Date.now = () => now() + 61000; }); // 받아 둔 서버 답(1분 기억)이 낡게: 화면을 열 때 서버에 다시 묻도록
+    st.off = true; await ctx.setOffline(true);
+    await p.evaluate(() => { location.hash = location.hash.replace(/\/2$/, '/3'); });
+    await p.waitForFunction(() => /인터넷이 끊겨 있어요/.test(document.querySelector('.publish')?.textContent || ''), null, { timeout: 15000 }).catch(() => {});
+    await p.waitForTimeout(1200);
+    const asked = st.calls.filter((c) => c === 'GET /api/info').length;
+    st.off = false; await ctx.setOffline(false);
+    const usable = await p.waitForSelector('.publish .pub-mode-main:not(.is-off)', { timeout: 10000 }).then(() => true, () => false);
+    const again = (await p.locator('.publish').innerText().catch(() => '')).replace(/\s+/g, ' ');
+    L.ok('step opened offline, back online within seconds → the server is asked afresh and 바로 배포 stays usable (no leftover "unreachable")', usable && !/이 망에서 바로 배포 서버에 닿지/.test(again) && st.calls.filter((c) => c === 'GET /api/info').length > asked, again.slice(0, 120));
     L.ok('no page errors ⑱', errs.filter((e) => !/Failed to load resource/.test(e)).length === 0, JSON.stringify(errs)); await ctx.close();
   }
   // 진짜 서버의 한도(pages 보기): 사이트 300MB·3,000개·파일 하나 20MB, 작은 파일(512KB 이하)은 8MiB씩 묶어 받음

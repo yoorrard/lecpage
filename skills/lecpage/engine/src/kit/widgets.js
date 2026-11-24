@@ -192,10 +192,18 @@ export function optionList(v) {
   return { value: Array.isArray(j.value) ? j.value.map((x) => String(x ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)).filter(Boolean) : undefined };
 }
 
-/** 교재 쪽 넘기기(강사 따라 넘기기). pages: [{ page, src, title, text }] */
+/**
+ * 교재 쪽 넘기기(강사 따라 넘기기). pages: [{ page, src, title, text, size? }] — size: 그 쪽 그림의 크기 { w, h }(모르면 없음).
+ * 그림 칸은 교재 비율(첫 쪽 — kit.css의 --lpk-deck-ratio, 16:9와 비슷하면 16:9)로 잡는데, 비율이 다른 쪽(가로 슬라이드 사이의 세로 문서 쪽)은
+ * 그 쪽만 제 비율로 잡음(style="aspect-ratio"): 교재 비율 칸에 넣으면 휴대폰에서 세로 쪽이 폭 140px쯤으로 줄어 읽을 수 없었음.
+ * 모든 쪽의 비율이 같은 교재는 전과 똑같은 글이 나옴. 작은 미리보기·전체 보기는 교재 비율 그대로
+ */
 export function deckBox(pages, { label = '교재', host = '강사' } = {}) {
   const last = Math.max(...pages.map((x) => +x.page || 0), pages.length);
-  const slides = pages.map((sl, i) => `<figure class="lp-slide" id="deck-p${sl.page}" data-page="${sl.page}" data-title="${esc(sl.title || '')}" data-text="${esc((sl.text || '').slice(0, 400))}"><img src="${esc(sl.src)}" alt="${esc(`${label} ${sl.page}쪽${sl.title ? ': ' + sl.title : ''}`)}" loading="${i < 2 ? 'eager' : 'lazy'}" decoding="async"><figcaption><span class="lp-slide-no">${sl.page}</span>${esc(sl.title || '')}</figcaption></figure>`).join('\n');
+  const ratio = (d) => (d && d.w > 0 && d.h > 0 ? d.w / d.h : 0);
+  const first = ratio(pages[0]?.size), base = first && Math.abs(first - 16 / 9) > 0.05 ? first : 16 / 9;
+  const own = (sl) => { const r = ratio(sl.size); return r && Math.abs(r - base) > 0.05 ? ` style="aspect-ratio:${sl.size.w}/${sl.size.h}"` : ''; };
+  const slides = pages.map((sl, i) => `<figure class="lp-slide" id="deck-p${sl.page}" data-page="${sl.page}" data-title="${esc(sl.title || '')}" data-text="${esc((sl.text || '').slice(0, 400))}"><img src="${esc(sl.src)}" alt="${esc(`${label} ${sl.page}쪽${sl.title ? ': ' + sl.title : ''}`)}" loading="${i < 2 ? 'eager' : 'lazy'}" decoding="async"${own(sl)}><figcaption><span class="lp-slide-no">${sl.page}</span>${esc(sl.title || '')}</figcaption></figure>`).join('\n');
   return `<div class="lp-deck" data-deck>
   <div class="lp-deck-stage" tabindex="0" aria-roledescription="슬라이드" aria-label="${esc(label)} ${pages.length}쪽">${slides}</div>
   <div class="lp-deck-bar" hidden>
