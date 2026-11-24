@@ -448,7 +448,8 @@ export function StepShare({ p, update, go, stale }) {
     btn: needPw ? null : [open.access ? '접기' : '바꾸기', () => toggle('access')],
     body: (open.access || needPw) && <>
       <div class="radio-cards" role="radiogroup" aria-label="공개 범위">
-        {[['link', '주소를 받은 사람만', '검색에 나오지 않아요. 주소나 QR을 받은 사람만 들어와요.'], ['password', '암호를 아는 사람만', '교재 그림까지 암호로 잠가요. 안내 QR로 들어오면 바로 열려요.'], ['public', '누구나', '검색에도 나와요. 공개 강의 홍보용이에요.']].map(([v, t, d]) => (
+        {[['link', '주소를 받은 사람만', '검색에 나오지 않아요. 주소나 QR을 받은 사람만 들어와요.'], ['password', '암호를 아는 사람만', '교재 그림까지 암호로 잠가요. 안내 QR로 들어오면 바로 열려요.'], // 바로 배포 서버는 모든 사이트를 검색에서 뺌(hosting: x-robots-tag noindex) → 그곳을 골랐을 때는 '검색에도 나와요'라고 하지 않음(2026-11-24 운영에서 확인)
+          ['public', '누구나', target === 'lecpage' ? '주소를 아는 누구나 열어요. 바로 배포한 사이트는 검색에는 나오지 않아요(검색에 나오게 하려면 다른 곳에 배포).' : '검색에도 나와요. 공개 강의 홍보용이에요.']].map(([v, t, d]) => (
           <label class="radio-card"><input type="radio" name="access" checked={access === v} onChange={() => setAccess(v)} /><span><b>{t}</b><small>{d}</small></span></label>
         ))}
       </div>
