@@ -27,6 +27,7 @@ async function server(ctx, { siteScripts, unsafe, down, failPublish = 0, tooLarg
     }
     if (u.pathname === '/api/sites' && m === 'POST') { st.sites = (st.sites || 0) + 1; return json({ id: 'site' + st.sites, key: 'k' + st.sites, url: `https://s-site${st.sites}.example.pages.dev/`, expiresAt: Date.now() + 60 * 864e5 }); }
     if (/^\/api\/sites\/site\d+$/.test(u.pathname) && m === 'DELETE') {
+      if (st.delHold) await st.delHold; // 배포 취소가 도는 동안을 만들 때(⑲)
       // st.notOurs: 바로 배포 서버의 답이 아닌 404(중간 장비나 다른 서버가 준 글). 앱은 이것으로 '이미 내려간 사이트'라고 보면 안 됨(열려 있는 사이트의 기록을 지우게 됨)
       if (st.notOurs) return r.fulfill({ status: 404, headers: { ...cors, 'content-type': 'text/plain' }, body: 'Not Found' });
       // st.gone: 서버에 이미 없는 사이트(먼저 취소했거나 보관 기간이 끝남). 서버가 주는 오류 모양 그대로({ error: { code, message_ko } } — hosting/src/http.js)
@@ -514,16 +515,37 @@ async function seed(p, script) {
     const after = await p.evaluate(() => ({ url: document.querySelector('.success .big-url')?.textContent.trim() || '', files: document.body.innerText.includes('둘째 메모') }));
     const proj = await L.readProject(p, L.pidOf(p));
     L.ok('after a reload the deploy record is still there (address and site key), and the other tab\'s change too', /s-site1\./.test(after.url) && !!proj.deploy?.lecpage?.key && (proj.site?.['files/둘째 메모.txt'] !== undefined || (proj.meta?.materials || proj.materials || []).some?.((m) => /둘째 메모/.test(m.name || m.title || '')) || JSON.stringify(proj).includes('둘째 메모')), JSON.stringify({ url: after.url, key: !!proj.deploy?.lecpage?.key, other: JSON.stringify(proj).includes('둘째 메모') }));
-    // 대화 창이 열린 채 저장이 멈추면(다른 탭이 저장): 잠긴 칸 안의 대화 창이 화면을 막은 채 남지 않고 닫힘 → 빨간 띠의 [다시 불러오기]를 누를 수 있음
+    // 대화 창이 열린 채 저장이 멈추면(다른 탭이 저장): 그 창은 억지로 닫히지도, 잠겨 화면을 막지도 않음(그 창의 일은 끝낼 수 있음) → 창을 닫는 대로 칸이 잠기고 빨간 띠의 [다시 불러오기]를 누를 수 있음
     if (await other.locator('.save-band').count()) { await other.click('.save-band .btn-primary'); await other.waitForSelector('.save-band', { state: 'detached', timeout: 15000 }).catch(() => {}); await other.waitForSelector('.st-panel', { timeout: 30000 }); }
     await p.click('.sites .sites-x'); await p.waitForSelector('dialog[open]:has-text("배포를 취소할까요")', { timeout: 10000 });
     const changed3 = await addFile('셋째 메모.txt');
-    await p.waitForSelector('.save-band', { timeout: 15000 }).catch(() => {}); await p.waitForTimeout(600);
-    const stuck = await p.evaluate(() => ({ band: !!document.querySelector('.save-band'), open: document.querySelectorAll('dialog[open]').length }));
-    const canReload = stuck.band ? await p.click('.save-band .btn-primary', { timeout: 5000 }).then(() => true, () => false) : false;
+    await p.waitForSelector('.save-band', { timeout: 15000 }).catch(() => {}); await p.waitForTimeout(900);
+    const held = await p.evaluate(() => ({ band: !!document.querySelector('.save-band'), open: document.querySelectorAll('dialog[open]').length, inert: !!document.querySelector('fieldset.plain-fieldset[inert]'), closeOk: !document.querySelector('dialog[open] button[disabled]') }));
+    L.ok('a dialog open when this tab stopped saving stays usable (not closed, not locked)', changed3 && held.band && held.open === 1 && !held.inert && held.closeOk, JSON.stringify({ changed3, ...held }));
+    await p.click('dialog[open] button:has-text("닫기")');
+    await p.waitForSelector('fieldset.plain-fieldset[inert]', { timeout: 5000 }).catch(() => {});
+    const after2 = await p.evaluate(() => ({ open: document.querySelectorAll('dialog[open]').length, inert: !!document.querySelector('fieldset.plain-fieldset[inert]') }));
+    const canReload = await p.click('.save-band .btn-primary', { timeout: 5000 }).then(() => true, () => false);
     if (canReload) await p.waitForSelector('.save-band', { state: 'detached', timeout: 15000 }).catch(() => {});
-    L.ok('a dialog that was open when this tab stopped saving is closed, and [이 탭으로 다시 불러오기] can be pressed', changed3 && stuck.band && stuck.open === 0 && canReload && await p.locator('.save-band').count() === 0, JSON.stringify({ changed3, ...stuck, canReload }));
-    L.ok('the site was not cancelled by the closed dialog', (st.calls || []).filter((c) => /^DELETE \/api\/sites\/site1$/.test(c)).length === 0 && await p.locator('.success .big-url').count() === 1);
+    L.ok('once that dialog is closed the area locks, and [이 탭으로 다시 불러오기] can be pressed', after2.open === 0 && after2.inert && canReload && await p.locator('.save-band').count() === 0, JSON.stringify({ ...after2, canReload }));
+    L.ok('the site was not cancelled', (st.calls || []).filter((c) => /^DELETE \/api\/sites\/site1$/.test(c)).length === 0 && await p.locator('.success .big-url').count() === 1);
+    // 배포 취소가 도는 중에 다른 탭이 저장: 그 창은 닫히지 않고 진행이 보이며, 취소가 끝나면 닫히고 칸이 잠김. 취소한 기록은 저장소에 남음(다시 불러와도 배포한 곳이 없음)
+    if (await other.locator('.save-band').count()) { await other.click('.save-band .btn-primary'); await other.waitForSelector('.save-band', { state: 'detached', timeout: 15000 }).catch(() => {}); await other.waitForSelector('.st-panel', { timeout: 30000 }); }
+    const delBefore = st.deleted || 0; let letGo; st.delHold = new Promise((res) => { letGo = res; });
+    await p.click('.sites .sites-x'); await p.waitForSelector('dialog[open]:has-text("배포를 취소할까요")', { timeout: 10000 });
+    await p.click('dialog[open] button.btn-danger'); await p.waitForTimeout(700);
+    const changed4 = await addFile('넷째 메모.txt');
+    await p.waitForSelector('.save-band', { timeout: 15000 }).catch(() => {}); await p.waitForTimeout(900);
+    const mid = await p.evaluate(() => ({ band: !!document.querySelector('.save-band'), open: document.querySelectorAll('dialog[open]').length, inert: !!document.querySelector('fieldset.plain-fieldset[inert]') }));
+    letGo(); st.delHold = null;
+    await p.waitForFunction(() => !document.querySelector('dialog[open]'), null, { timeout: 20000 }).catch(() => {});
+    await p.waitForSelector('fieldset.plain-fieldset[inert]', { timeout: 5000 }).catch(() => {});
+    const end = await p.evaluate(() => ({ open: document.querySelectorAll('dialog[open]').length, inert: !!document.querySelector('fieldset.plain-fieldset[inert]') }));
+    L.ok('cancel running while another tab saved: its dialog stays open and usable until it finishes, then the area locks', changed4 && mid.band && mid.open === 1 && !mid.inert && (st.deleted || 0) === delBefore + 1 && end.open === 0 && end.inert, JSON.stringify({ changed4, mid, end, deleted: st.deleted }));
+    await p.waitForTimeout(1500);
+    await p.click('.save-band .btn-primary', { timeout: 5000 }).catch(() => {}); await p.waitForSelector('.save-band', { state: 'detached', timeout: 15000 }).catch(() => {}); await p.waitForTimeout(1200);
+    const proj2 = await L.readProject(p, L.pidOf(p));
+    L.ok('the cancellation is recorded even though this tab had stopped saving (no deployed place after a reload), and the other tab\'s change is kept', !proj2.deploy?.lastUrl && !proj2.deploy?.sites?.lecpage && await p.locator('.success .big-url').count() === 0 && (proj2.materials || []).some((m) => /넷째 메모/.test(m.title || m.name || m.href || '')), JSON.stringify({ lastUrl: proj2.deploy?.lastUrl || '', sites: Object.keys(proj2.deploy?.sites || {}), materials: (proj2.materials || []).map((m) => m.title || m.href).slice(-2) }));
     await other.close();
     L.ok('no page errors ⑲', errs.length === 0, JSON.stringify(errs)); await ctx.close();
   }

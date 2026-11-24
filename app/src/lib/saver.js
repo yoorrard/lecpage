@@ -70,11 +70,12 @@ export function makeSaver(id, base, onState) {
     reset(b) { base = b; stop = ''; failed = false; latest = null; dirty = false; clearTimeout(timer); timer = 0; },
     base: () => base,
     stopped: () => stop,
-    /** 기다리는 것을 다 쓸 때까지(생성 쪽이 저장소에서 이 연수를 읽기 전에). maxMs: 기다릴 한도(기본 3초, 배포 기록처럼 꼭 결과를 봐야 할 때는 길게) */
-    async idle(maxMs = 3000) {
+    /** 기다리는 것을 다 쓸 때까지(생성 쪽이 저장소에서 이 연수를 읽기 전에). maxMs: 기다릴 한도(배포 기록처럼 꼭 결과를 봐야 할 때만 길게 줌) */
+    async idle(maxMs = 0) {
       if (timer) { clearTimeout(timer); run(); }
-      const max = Math.max(1, Math.ceil((maxMs > 0 ? maxMs : 3000) / 30));
-      for (let i = 0; i < max && (busy || timer || (latest && !stop && !failed)); i++) await new Promise((r) => setTimeout(r, 30));
+      // 한도: 기본은 예전처럼 30ms씩 100번. maxMs를 주면 그 시간까지(가려진 탭은 타이머가 늦어져 횟수로 세면 몇십 분이 됨)
+      const end = maxMs > 0 ? Date.now() + maxMs : 0;
+      for (let i = 0; (end ? Date.now() < end : i < 100) && (busy || timer || (latest && !stop && !failed)); i++) await new Promise((r) => setTimeout(r, 30));
     },
   };
 }

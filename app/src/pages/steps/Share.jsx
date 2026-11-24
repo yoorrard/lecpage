@@ -150,10 +150,20 @@ export function StepShare({ p, update, go, stale, stopped, storeNow, idle, settl
   const [autoLive, setAutoLive] = useState(false); // 운영자의 바로 배포 서버가 참여 기능까지 맡는지
   const [target, setTarget] = useState(''); // 지금 고른 배포할 곳(Publish가 알려 줌)
   const [skipLive, setSkipLive] = useState(false); // 이번에는 참여 기능 없이 배포하기
-  // 저장이 멈춘 동안은 배포 칸을 통째로 잠금(아래 fieldset) — 그때 그 안에 열려 있던 대화 창은 잠긴 채 화면을 막으니(닫기도, 빨간 띠의 [다시 불러오기]도 못 누름) 닫아 둠.
-  // 도는 일(배포·배포 취소)이 있는 동안은 잠그지 않음: 그 창을 닫으면 진행·묻는 칸·실패 까닭이 안 보이고 창을 다시 열 수도 없었음. 일이 끝나면 잠그고 닫음(새 배포는 guard가 막음)
-  const locked = !!stale && !busy;
-  useEffect(() => { if (locked) for (const d of document.querySelectorAll('fieldset.plain-fieldset dialog[open]')) { try { d.close(); } catch { /* 이미 닫힘 */ } } }, [locked]);
+  // 저장이 멈춘 동안은 배포 칸을 통째로 잠금(아래 fieldset). 다만 그 칸 안에 대화 창이 열려 있는 동안은 잠금을 미룸:
+  // 잠긴 칸 안의 창은 눌리지 않으면서 화면을 막고(닫기도, 빨간 띠의 [다시 불러오기]도 못 누름), 억지로 닫으면 도는 일(배포 취소·로그인)의 진행·묻는 칸·실패 까닭이 사라지고 다시 열 수도 없음.
+  // 열린 창은 그 자체로 나머지 화면을 막으니 그 창의 일만 끝낼 수 있고, 창이 닫히는 대로 잠금(0.3초마다 봄 — 창은 닫힘 알림 없이 사라지기도 함)
+  const dlgIn = () => typeof document !== 'undefined' && !!document.querySelector('fieldset.plain-fieldset dialog[open]');
+  const [, setTick] = useState(0);
+  const seenDlg = useRef(false); seenDlg.current = !!stale && dlgIn();
+  const locked = !!stale && !seenDlg.current;
+  useEffect(() => {
+    if (!stale) return undefined;
+    const t = setInterval(() => { if (dlgIn() !== seenDlg.current) setTick((n) => n + 1); }, 300);
+    return () => clearInterval(t);
+  }, [stale]);
+  const staleNow = useRef(false); staleNow.current = !!stale; // 기다린 뒤에 다시 볼 때(guard의 after)
+  const alive = useRef(true); useEffect(() => () => { alive.current = false; }, []);
   const [open, setOpen] = useState({}); // 체크리스트에서 [바꾸기]로 펼친 줄
   const [fontNote, setFontNote] = useState(''); // 글꼴을 사이트에 담지 못했을 때 한 줄
   const [info, setInfoSrv] = useState(null); // 바로 배포 서버의 /api/info(보관 기간·하루 한도)
@@ -293,6 +303,8 @@ export function StepShare({ p, update, go, stale, stopped, storeNow, idle, settl
       setBusy(target); setProg({ step: '지난 기록을 확인하는 중', pct: 1 });
       const after = (r) => {
         recAsk.current = false; setProg(null); setBusy('');
+        // 기다리는 사이 다른 탭이 저장했으면 여기서 그만둠(맨 위의 확인은 누른 때 한 번뿐)
+        if (staleNow.current) { toast('다른 탭에서 이 연수를 고쳤어요. [이 탭으로 다시 불러오기]를 누른 뒤 배포해 주세요.'); return; }
         if (r && oldRecords(p, r)) setAskRoom(true); else pass(run, auto);
       };
       Promise.race([w, new Promise((ok) => setTimeout(() => ok(null), 5000))]).then(after, () => after(null));
@@ -376,7 +388,7 @@ export function StepShare({ p, update, go, stale, stopped, storeNow, idle, settl
     // 배포가 도는 사이(몇 초~1분) 다른 탭이 이 연수를 저장하면 이 탭은 저장을 멈춤(덮어쓰지 않게) → 위 저장이 버려져, 다시 불러오면 방금 배포한 주소·수정 키가 사라졌음.
     // 그때는 결과만 저장소의 지금 판(다른 탭이 고친 것) 위에 바로 얹음: 다른 탭의 고친 내용도, 이 배포 기록도 남음
     // (다른 탭에서 연수를 지웠으면 얹을 곳이 없어 아무것도 하지 않음. 충돌을 위 저장을 쓰다가 알게 되는 때도 있어 다 쓴 뒤에 한 번 더 봄 — 같은 결과를 두 번 얹어도 값이 같음)
-    const keep = () => { if (stopped?.() === 'changed' && storeNow) storeNow(result).then((saved) => { if (saved) toast('배포 기록을 저장했어요. 다른 탭에서 고친 내용은 [이 탭으로 다시 불러오기]로 이어서 봐요.'); }, () => { }); };
+    const keep = () => { if (stopped?.() === 'changed' && storeNow) storeNow(result).then((saved) => { if (saved && alive.current) toast('배포 기록을 저장했어요. 다른 탭에서 고친 내용은 [이 탭으로 다시 불러오기]로 이어서 봐요.'); }, () => { }); };
     // settle: 큰 연수·느린 기기는 저장이 몇 초 넘게 걸림 — 3초만 기다리는 idle로는 저장이 끝나기 전에 보고 지나쳐 기록을 잃었음
     if (stopped?.() === 'changed') keep(); else if (settle || idle) (settle || idle)().then(keep, () => { });
   }
