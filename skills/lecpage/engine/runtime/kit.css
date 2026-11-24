@@ -208,6 +208,8 @@
 .lpk .lp-deck-thumbs button{flex:none;width:112px;padding:0;border:2px solid transparent;border-radius:6px;background:none;cursor:pointer;color:inherit;overflow:hidden}
 .lpk .lp-deck-thumbs button[aria-current="true"]{border-color:var(--_ac)}
 .lpk .lp-deck-thumbs img{display:block;width:100%;aspect-ratio:var(--lp-deck-ratio,var(--lpk-deck-ratio,16/9));object-fit:cover;background:var(--_paper)}
+/* 교재 비율과 다른 쪽(가로 교재 사이의 세로 쪽·세로 교재 사이의 가로 쪽)은 잘라 내지 않고 통째로: 잘라 내면 세로 쪽의 흰 여백만 보임 */
+.lpk .lp-deck-thumbs img.is-own,.lpk .lp-overview-grid img.is-own{object-fit:contain}
 .lpk .lp-thumb-t{display:grid;gap:2px;padding:6px;font-size:max(12px,.75rem);text-align:start}
 .lpk .lp-thumb-t i{font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 휴대폰: '전체 보기'·'전체 화면'은 그림 단추(이름은 화면 낭독기에 그대로)로 줄여 쪽 넘기기와 한 줄에, '강사 따라 넘기기'는 다음 줄에 누를 곳 크기로.
@@ -284,6 +286,9 @@ dialog.lpk.lp-overview::backdrop{background:rgba(0,0,0,.55)}
 .lpk.lpk-chrome,.lpk.lpk-now,.lpk.lpk-dock{--_ink:var(--_text);color:var(--_text)}
 .lpk .lp-dock,.lpk.lp-dock{position:fixed;z-index:2147483001;right:max(12px,env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:6px;padding:6px;border-radius:999px;background:var(--_paper);color:var(--_text);border:1px solid color-mix(in srgb,var(--_text) 18%,transparent);box-shadow:0 8px 26px rgba(0,0,0,.2);max-width:calc(100% - 24px);flex-wrap:wrap;justify-content:flex-end}
 .lpk.lpk-dock--placed .lp-dock{position:static;box-shadow:none;max-width:none}
+/* 떠 있는 도크가 첫 화면의 단추(출석하고 시작하기·바로 가기)를 덮으면 처음 내릴 때까지 감춤(lecpage.js lp-dock-wait). 키보드로 들어오면 보임 */
+.lpk .lp-dock{transition:opacity .25s ease,transform .25s ease}
+html.lp-dock-wait .lpk .lp-dock:not(:focus-within){opacity:0;pointer-events:none;transform:translateY(16px)}
 .lpk .lp-btn-dock{min-height:44px;border-radius:999px;border:0;background:var(--_text);color:var(--_paper);padding:.4em 1em;font-size:.9rem}
 .lpk .lp-btn-dock:hover{background:color-mix(in srgb,var(--_text) 85%,var(--_paper))}
 .lpk .lp-live-dot{width:10px;height:10px;border-radius:50%;margin:0 4px;background:color-mix(in srgb,var(--_text) 45%,transparent)}

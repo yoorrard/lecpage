@@ -141,7 +141,7 @@ function coverOf(p, pageNums) {
  */
 const hostFileLimit = (to) => { const l = E.HOSTS[to]?.limit; const mb = l?.fileMB || l?.siteMB; return mb ? { maxFileBytes: mb * 1024 * 1024 } : null; };
 
-export function StepShare({ p, update, go }) {
+export function StepShare({ p, update, go, stale }) {
   const bp = deployView(p);
   const [busy, setBusy] = useState('');
   const [prog, setProg] = useState(null);
@@ -273,6 +273,9 @@ export function StepShare({ p, update, go }) {
   }
   /** 참여 기능이 켜져 있는데 연결 전이면 먼저 물어봄. [참여 기능 없이 배포]를 골랐으면 묻지 않고 참여 기능 없이. kind 'zip': 사이트 ZIP 다운로드 */
   function guard(run, auto = false, kind = '') {
+    // 다른 탭에서 이 연수를 고쳐 이 탭이 저장을 멈춘 동안(Project.jsx의 빨간 띠)에는 배포하지 않음: 배포한 주소와 수정 키를 저장하지 못해,
+    // 새로 고치면 그 사이트를 다시 배포하거나 취소할 길이 없어짐(주소만 열린 채 남음). 사이트 ZIP 다운로드는 저장할 것이 없어 그대로
+    if (stale && kind !== 'zip') { toast('다른 탭에서 이 연수를 고쳤어요. [이 탭으로 다시 불러오기]를 누른 뒤 배포해 주세요.'); return; }
     // 지난 기록을 어떻게 할지 고르지 않고 다시 배포하면 먼저 물음(지우지는 않음). 사이트 ZIP 다운로드는 바로 배포의 기록과 상관없어 묻지 않고 바로 받음
     // (기록은 바로 배포 서버의 방에 있고, 그 방은 바로 배포한 사이트 주소에서만 열림)
     const mayAsk = !room && kind !== 'zip' && target === 'lecpage'; // 지난 기록은 바로 배포 방에만 있음(다른 곳에 배포할 때는 묻지 않음)

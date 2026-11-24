@@ -34,8 +34,15 @@
     var say = function (t) { if (msg) msg.textContent = t; };
     if (!subtle) { say('이 브라우저(또는 http 주소)에서는 열 수 없어요. https 주소로 열어 주세요.'); return; }
     var blob = fromB64(P.data);
+    // 문서를 아직 읽는 중이면 다 읽을 때까지 기다림. 기억해 둔 열쇠로 바로 풀 때(새로 고침·다른 쪽·다음 방문)는 풀이가 문서 읽기보다 먼저 끝나는데,
+    // 읽는 중의 doc.open()은 브라우저가 무시하고 doc.write()는 읽던 자리에 끼워 넣음 → 잠금 화면 아래에 풀린 글이 붙고, 그 글 속의 이 스크립트가
+    // 아직 남아 있는 잠금 화면을 보고 또 풀어 끝없이 덧붙었음(2026-11-24 실제 에이전트 실행에서 찾음). 암호를 직접 넣을 때는 이미 다 읽은 뒤라 드러나지 않았음
+    var parsed = function () {
+      if (doc.readyState !== 'loading') return Promise.resolve();
+      return new Promise(function (ok) { doc.addEventListener('DOMContentLoaded', function () { setTimeout(ok, 0); }); });
+    };
     var open = function (key, raw, remember) {
-      return decrypt(key, blob).then(function (buf) {
+      return decrypt(key, blob).then(function (buf) { return parsed().then(function () { return buf; }); }).then(function (buf) {
         saveKey(P.salt, raw, remember);
         var html = new TextDecoder().decode(buf);
         // 풀린 글은 서버가 살펴볼 수 없으므로 여기서 한 번 더 거름: 다른 곳으로 넘기는 meta refresh와 base는 뺌(스크립트는 CSP가 막음)

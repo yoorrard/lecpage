@@ -40,9 +40,9 @@ test('fitSiteImages(새로 만들 때): 한도 안이면 전부, 넘으면 고�
   const { blobs } = fake(100, 100);
   const list = Array.from({ length: 100 }, (_, i) => `material/p-${pad3(i + 1)}.webp`);
   const all = await L.fitSiteImages(blobs, 'p', list, [], null, { siteMB: 40 });
-  assert.equal(all.cut, false); assert.equal(all.list.length, 100);
+  assert.equal(all.cut, false); assert.equal(all.list.length, 100); assert.equal(all.last, 100);
   const cut = await L.fitSiteImages(blobs, 'p', list, [{ name: 'a.pdf', first: 1, count: 100 }], null, { siteMB: 5 }); // 4MiB까지: 100KB짜리 40장쯤
-  assert.equal(cut.cut, true); assert.equal(cut.total, 100);
+  assert.equal(cut.cut, true); assert.equal(cut.total, 100); assert.equal(cut.last, 100, '마지막 쪽 번호(커넥트에 알림: 배포한 사이트에는 여기까지 모두 있음)');
   assert.ok(cut.list.length >= 30 && cut.list.length <= 40, String(cut.list.length));
   assert.ok(cut.list.includes('material/p-001.webp') && cut.list.includes('material/p-100.webp'), '처음·끝 쪽은 감(작업 지시의 쪽 범위가 그대로)');
 });
@@ -55,7 +55,7 @@ test('fitSiteForEdit: 한도 안이면 전부(only 없음), 넘으면 자료·�
   const site = { 'index.html': DECK.replace('<h1>제목</h1>', '<h1>제목</h1><img src="material/p-050.webp" alt="50쪽"><img src="material/p-051.webp" alt="51쪽">') };
   const sets = [{ name: 'a.pdf', first: 1, count: 60 }, { name: 'b.pptx', first: 61, count: 40 }];
   // 넉넉한 커넥트(200MB): 예전처럼 전부
-  assert.deepEqual(await L.fitSiteForEdit(blobs, 'p', site, sets, { siteMB: 200 }), { only: null, total: 100, sent: 100, over: false, mb: 0 });
+  assert.deepEqual(await L.fitSiteForEdit(blobs, 'p', site, sets, { siteMB: 200 }), { only: null, total: 100, sent: 100, over: false, mb: 0, last: 100 });
   // 좁은 커넥트(5MB → 4MiB까지): 쪽 그림만 줄임
   const fit = await L.fitSiteForEdit(blobs, 'p', site, sets, { siteMB: 5 });
   assert.equal(fit.over, false); assert.equal(fit.total, 100); assert.ok(fit.sent < 100 && fit.sent >= 25, String(fit.sent));
@@ -89,7 +89,7 @@ test('fitSiteForEdit: 사이트가 쪽을 모두 가리키면(data-pages로 전�
   for (let n = 1; n <= 20; n++) assert.ok(some.only.includes(`material/p-${pad3(n)}.webp`), `p-${pad3(n)}`);
   // 쪽 그림이 없는 사이트·예전 커넥트(siteMB를 알려 주지 않음 → 40MB): 예전 그대로
   const none = fake(0, 0, { 'site/files/a.pdf': new Uint8Array(1000) });
-  assert.deepEqual(await L.fitSiteForEdit(none.blobs, 'p', { 'index.html': DECK }, [], null), { only: null, total: 0, sent: 0, over: false, mb: 0 });
+  assert.deepEqual(await L.fitSiteForEdit(none.blobs, 'p', { 'index.html': DECK }, [], null), { only: null, total: 0, sent: 0, over: false, mb: 0, last: 0 });
   const old = await L.fitSiteForEdit(fake(500, 100).blobs, 'p', { 'index.html': DECK }, [], { materialMB: 120 }); // 약 49MiB → 39MiB까지
   assert.equal(old.over, false); assert.ok(old.sent < 500 && old.sent > 300, String(old.sent));
 });
@@ -99,3 +99,17 @@ test('작업 지시(고치기): 쪽 그림의 처음~끝 번호와 폴더에 있
   assert.match(task, /교재 쪽 그림: `work\/site\/material\/` \(p-001 ~ p-100, 그중 37장, \.webp\)/);
   assert.doesNotMatch(taskText({ kind: 'edit', materials: ['a.pdf'], pageImages: { first: 1, last: 100, count: 100, exts: ['webp'], sample: 'p-001.webp' }, request: '' }), /그중/);
 });
+
+// 실제 AI 300쪽 사이트(2026-11-24): '그중 78장'만 보고 AI가 사이트에 "바로 열리는 쪽 78장"이라 적고 나머지 222쪽을 흐리게 함(실제로는 300쪽이 모두 배포됨).
+// 앱이 골라 보냈을 때는 배포한 사이트에 모든 쪽이 들어간다는 사실을 그대로 한 줄(kept: 마지막 쪽 번호 — 앱이 pagesKept로 보냄)
+test('작업 지시: 앱이 쪽 그림을 골라 보냈으면 "배포한 사이트에는 모든 쪽 그림이 들어가요"를 알림(받지 않았다고 사이트에 없는 것이 아님)', () => {
+  const pi = { first: 1, last: 300, count: 78, exts: ['webp'], sample: 'p-001.webp' };
+  for (const kind of ['make', 'edit']) {
+    const t = taskText({ kind, materials: ['big.pdf'], pageImages: pi, request: '', kept: 300 });
+    assert.match(t, /p-001 ~ p-300, 그중 78장, \.webp\).*크기 때문에 여기에는 78장만 받았고, 배포한 사이트에는 p-001~p-300 모든 쪽 그림이 들어가요\n/, kind);
+  }
+  // 알림이 없으면(예전 앱·정말 그림이 없는 쪽) 전과 같은 줄, 모두 받았으면 덧붙이지 않음
+  assert.doesNotMatch(taskText({ kind: 'make', materials: ['big.pdf'], pageImages: pi, request: '' }), /배포한 사이트에는/);
+  assert.doesNotMatch(taskText({ kind: 'make', materials: ['big.pdf'], pageImages: { ...pi, count: 300 }, request: '', kept: 300 }), /배포한 사이트에는|그중/);
+});
+

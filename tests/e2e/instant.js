@@ -476,6 +476,30 @@ async function seed(p, script) {
     L.ok('slow server answer: instant deploy is the choice once it arrives', /바로 배포/.test(end.on) && end.big === '배포하기' && Date.now() - t0 < 12000, JSON.stringify(end));
     L.ok('no page errors ⑯', errs.length === 0, JSON.stringify(errs)); await ctx.close();
   }
+  { // ⑲ 다른 탭에서 이 연수를 고쳐 이 탭이 저장을 멈춘 동안에는 배포하지 않음(배포한 주소·수정 키를 저장하지 못해 새로 고치면 그 사이트를 다룰 길이 없어짐)
+    const ctx = await b.newContext({ viewport: { width: 1366, height: 900 } }); const st = await server(ctx, { siteScripts: true });
+    const p = await ctx.newPage(); const errs = L.watch(p);
+    await seed(p, true);
+    const other = await ctx.newPage(); await other.goto(p.url().replace(/\/3$/, '/2'), { waitUntil: 'load' });
+    await other.waitForSelector('.st-panel', { timeout: 60000 });
+    // 다른 탭에서 저장을 일으킴: 자료 하나를 더함(연수에 적힘)
+    const fileIn = other.locator('.st-panel input[type=file]').first();
+    const changed = await fileIn.count() === 1; if (changed) { await fileIn.setInputFiles({ name: '확인 메모.txt', mimeType: 'text/plain', buffer: Buffer.from('다른 탭에서 더한 자료') }); await other.waitForTimeout(2500); }
+    await p.waitForSelector('.save-band', { timeout: 15000 }).catch(() => {});
+    const band = await p.locator('.save-band').count();
+    const before = st.sites || 0;
+    if (band) { await p.click('.publish .btn-primary.btn-lg'); await p.waitForTimeout(1500); }
+    L.ok('another tab changed the project → this tab shows the "다른 탭에서 고쳤어요" band', changed && band === 1, `changed ${changed} band ${band}`);
+    L.ok('deploy from the tab that stopped saving is refused with a reason (no site is made)', band === 1 && (st.sites || 0) === before && /다시 불러오기/.test(await p.locator('.toast, [role=status], [role=alert]').allInnerTexts().then((a) => a.join(' '))), `sites ${st.sites || 0}`);
+    if (band) { await p.click('.save-band .btn-primary'); await p.waitForSelector('.save-band', { state: 'detached', timeout: 15000 }).catch(() => {}); }
+    await other.close();
+    await p.waitForSelector('.publish .btn-primary.btn-lg', { timeout: 30000 });
+    await p.click('.publish .btn-primary.btn-lg');
+    await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
+    await p.waitForSelector('.success .big-url', { timeout: 30000 }).catch(() => {});
+    L.ok('after [이 탭으로 다시 불러오기] the deploy goes through', (st.sites || 0) === before + 1 && await p.locator('.success .big-url').count() === 1, `sites ${st.sites || 0}`);
+    L.ok('no page errors ⑲', errs.length === 0, JSON.stringify(errs)); await ctx.close();
+  }
   await b.close();
   process.exit(L.summary() ? 1 : 0);
 })().catch((e) => { console.error('SCRIPT ERROR', e); process.exit(1); });

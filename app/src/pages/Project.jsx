@@ -118,7 +118,8 @@ export function Project({ id, step }) {
   }
   /** [파일로 저장]: 배포한 연수면 열쇠를 담을지 먼저 물음 */
   const askSave = () => (p.deploy?.lastUrl ? (setWithKeys(false), setSaveAsk(true)) : saveProjectFile());
-  const ctx = { p, update, go, job, idle: () => saver.idle(), reload: () => load({ keep: true }) };
+  // stale: 다른 탭에서 이 연수를 고쳐 이 탭이 저장을 멈춤(빨간 띠) — 배포하기 화면이 그동안 배포를 받지 않음
+  const ctx = { p, update, go, job, idle: () => saver.idle(), reload: () => load({ keep: true }), stale: st.s === 'changed' };
   return (
     <div class={`wiz stage-${s}${wide ? " is-studio" : ""}`}>
       {p.demo && <DemoBar pid={id} />}

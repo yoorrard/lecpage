@@ -431,12 +431,12 @@ async function runAgent(ctx, step) {
     // 교재마다 그린 쪽 그림(이어 매긴 번호): 그 형식을 모르는 예전 커넥트에는 예전처럼 첫 교재의 쪽 그림만 보냄
     const all = ctx.images?.sets || [];
     const sets = all.length > 1 && !(st?.caps || []).includes(PAGE_SETS_CAP) ? all.slice(0, 1) : all;
-    let only = null;
+    let only = null; let kept = 0; // kept: 쪽 그림을 골라 보낼 때, 배포한 사이트에 들어갈 마지막 쪽 번호(커넥트가 작업 지시에 그대로 적음 — studio.mjs pagesKept)
     if (rec.kind === 'make') {
       const fit = await fitSiteImages(blobs, rec.pid, ctx.images?.list || [], sets, sets.length < all.length ? sets : null, st?.limits || null);
       only = fit.list;
       if (sets.length < all.length) rec2notes(rec, [`lecpage 커넥트가 예전 버전이라 ${sets[0].name}의 쪽 그림만 보냈어요. 커넥트를 새 버전으로 바꾸면 교재마다 보내요.`]);
-      if (fit.cut) rec2notes(rec, [`교재 쪽 그림이 많아 ${fit.total}장 중 ${fit.list.length}장을 골라 lecpage 커넥트로 보냈어요.`]);
+      if (fit.cut) { kept = fit.last || 0; rec2notes(rec, [`교재 쪽 그림이 많아 ${fit.total}장 중 ${fit.list.length}장을 골라 lecpage 커넥트로 보냈어요.`]); }
     } else {
       // 고치기: 지금 사이트 전체를 보내되, 커넥트의 사이트 한도를 넘으면 교재 쪽 그림만 고르게 줄여 보냄(자료·사진과 사이트 글이 가리키는 쪽 그림은 꼭 보냄).
       // 보내지 않은 쪽 그림은 저장소에 그대로라(아래에서 받은 것을 담기만 함) 고친 사이트의 교재 슬라이드에는 모든 쪽이 남음. 예전에는 통째로 보내 커넥트가 크기로 거절했음
@@ -444,7 +444,7 @@ async function runAgent(ctx, step) {
       if (fit.over) throw new AiError('site-big', `꼭 함께 보내야 하는 사이트 파일(자료·사진과 사이트가 쓰는 쪽 그림)이 ${fit.mb}MB예요. 이 PC의 lecpage 커넥트는 ${+st?.limits?.siteMB || 40}MB까지 받아요. 자료실의 큰 파일을 줄이거나 다른 AI를 골라 주세요.`, { provider: 'local' });
       only = fit.only;
       // (고치기의 알림은 작업 기록에만 남음: 사이트와 그 쪽 그림은 그대로라 강사가 할 일이 없음)
-      if (only) rec2notes(rec, [`교재 쪽 그림이 많아 ${fit.total}장 중 ${fit.sent}장만 lecpage 커넥트로 보냈어요. 사이트의 쪽 그림은 그대로예요.`]);
+      if (only) { kept = fit.last || 0; rec2notes(rec, [`교재 쪽 그림이 많아 ${fit.total}장 중 ${fit.sent}장만 lecpage 커넥트로 보냈어요. 사이트의 쪽 그림은 그대로예요.`]); }
     }
     // 커넥트 한도에 맞춰(넘으면 보내기 전에 알림). 한도 때문에 원본 대신 같은 이름의 PDF만 간 교재는 말없이 빼지 않고 강사에게 알리고,
     // PDF에 없는 발표자 노트는 글 파일로 함께 보냄(local.js bridgeFiles)
@@ -457,6 +457,7 @@ async function runAgent(ctx, step) {
     return {
       files,
       site: { ...(await bridgeSite(blobs, rec.pid, only)), ...(rec.kind !== 'make' ? rec.site || project.site || {} : {}) },
+      ...(kept ? { pagesKept: kept } : {}),
     };
   };
   const payload = {

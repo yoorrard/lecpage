@@ -806,7 +806,9 @@ export async function validateJob(body) {
     }
   }
   if (kind === 'edit' && !site['index.html']) return bad("고치기(kind:'edit')에는 지금 사이트(site['index.html'])가 있어야 해요.");
-  return { agent, kind, request, reference: reference.slice(0, LIMITS.reference), meta: isObj(body.meta) ? body.meta : null, target: typeof body.target === 'string' ? body.target.slice(0, 80) : '', materials, photos, site };
+  return { agent, kind, request, reference: reference.slice(0, LIMITS.reference), meta: isObj(body.meta) ? body.meta : null, target: typeof body.target === 'string' ? body.target.slice(0, 80) : '', materials, photos, site,
+    // pagesKept: 앱이 쪽 그림을 골라(크기 때문에) 보냈을 때, 배포한 사이트에 들어갈 마지막 쪽 번호. 작업 지시에 '여기 없는 쪽도 사이트에는 있다'고 그대로 적음(없으면 0)
+    pagesKept: Number.isInteger(body.pagesKept) && body.pagesKept >= 1 && body.pagesKept <= 10000 ? body.pagesKept : 0 };
 }
 
 /** 강사가 고른 분위기(앱이 { title, mood }나 글로 보냄) → 한 줄. 강사 요청의 일부로만 넣음 */
@@ -819,7 +821,7 @@ const picksOf = (ref) => { let j = null; try { j = JSON.parse(String(ref || ''))
  * 원칙: 디자인·구성·읽는 법·확인 방법은 에이전트가 정함. lecpage는 목표 한 줄, 강사 요청, 배포에 꼭 필요한 조건,
  * 쓰고 싶을 때만 쓰는 강의 기능 자리 표시, 원하면 쓰는 확인 명령만 알려 줌(앱의 키 경로 지시 app/src/lib/gen/prompts.js와 같은 뜻)
  */
-export function taskText({ kind, materials, photos = [], pages = 0, images = 0, md = false, request = '', reference = '', target = '', library = false, pageImages = null, noImages = [], unread = [], links = false, pdfText = [], pdfTextMb = 0, standIns = [] }) {
+export function taskText({ kind, materials, photos = [], pages = 0, images = 0, md = false, request = '', reference = '', target = '', library = false, pageImages = null, noImages = [], unread = [], links = false, pdfText = [], pdfTextMb = 0, standIns = [], kept = 0 }) {
   const edit = kind === 'edit';
   const pad3 = (n) => String(n).padStart(3, '0');
   const tick = (n) => `\`${n}\``;
@@ -828,7 +830,10 @@ export function taskText({ kind, materials, photos = [], pages = 0, images = 0, 
   // (예전 인자 pages·images만 주면 1번부터 그 수만큼으로 봄)
   const pi = pageImages || (images ? { first: 1, last: Math.max(pages, images), count: images, exts: ['webp'], sample: 'p-001.webp' } : null);
   const whose = pi?.sets?.length > 1 ? `교재마다 이어서 번호를 매겼어요(${pi.sets.map((x) => `${tick(x.owner)} p-${pad3(x.first)}~p-${pad3(x.last)}`).join(', ')}). ` : !pi?.multi ? '' : pi.owner ? `${tick(pi.owner)}의 쪽 그림이에요. ` : pi.given ? '넣은 교재 가운데 하나의 쪽 그림이에요. ' : '';
-  const imgLine = pi ? `- 교재 쪽 그림: \`work/site/material/\` (p-${pad3(pi.first)} ~ p-${pad3(pi.last)}${pi.count < pi.last - pi.first + 1 ? `, 그중 ${pi.count}장` : ''}, ${pi.exts.map((e) => '.' + e).join('·')}) — ${whose}사이트에 그대로 써도 돼요(\`material/${pi.sample}\`)\n` : '';
+  // 앱이 크기 때문에 쪽 그림을 골라 보낸 때(kept: 배포한 사이트의 마지막 쪽 번호): 받은 것만 있다고 적으면 AI가 '사이트에서 열리는 쪽은 N장뿐'이라고 사이트에 적음
+  // (2026-11-24 실제 AI 300쪽 사이트: 78장만 열린다고 적고 나머지를 흐리게 함 — 실제로는 300쪽이 모두 배포됨). 사실을 그대로 한 줄
+  const keptNote = pi && kept > 0 && pi.count < kept ? `. 크기 때문에 여기에는 ${pi.count}장만 받았고, 배포한 사이트에는 p-${pad3(1)}~p-${pad3(kept)} 모든 쪽 그림이 들어가요` : '';
+  const imgLine = pi ? `- 교재 쪽 그림: \`work/site/material/\` (p-${pad3(pi.first)} ~ p-${pad3(pi.last)}${pi.count < pi.last - pi.first + 1 ? `, 그중 ${pi.count}장` : ''}, ${pi.exts.map((e) => '.' + e).join('·')}) — ${whose}사이트에 그대로 써도 돼요(\`material/${pi.sample}\`)${keptNote}\n` : '';
   // 원본이 커서 앱이 대신 보낸 글(standIns [{ name, for }]): 교재 원본 줄에 넣지 않고 있는 그대로 따로 적음
   const standNames = new Set(standIns.map((x) => x.name));
   const originals = materials.filter((m) => !standNames.has(m));
@@ -1098,7 +1103,7 @@ async function runJob(S, job) {
     copyFileSync(join(REF, 'kit.md'), join(ws, 'kit.md')); // 강의 기능 자리 표시 꼴(쓰고 싶을 때만)
     const library = existsSync(join(REF, 'design-library.md')); // 디자인 서재(필요하면 참고, 따를 의무 없음)
     if (library) copyFileSync(join(REF, 'design-library.md'), join(ws, 'design-library.md'));
-    writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), standIns: inp.materials.filter((m) => m.standsFor).map((m) => ({ name: m.name, for: m.standsFor })), photos: inp.photos.map((p) => p.name), pageImages, noImages, unread: lost.map((u) => u.name), md: md && (!prep || files.some((f) => f.type !== 'pdf' && f.pages > 0)), links, pdfText, pdfTextMb: PDF_WHOLE_MB, request: inp.request, reference: inp.reference, target: inp.target, library }));
+    writeFileSync(join(ws, 'TASK.md'), taskText({ kind: job.kind, materials: inp.materials.map((m) => m.name), standIns: inp.materials.filter((m) => m.standsFor).map((m) => ({ name: m.name, for: m.standsFor })), photos: inp.photos.map((p) => p.name), pageImages, noImages, unread: lost.map((u) => u.name), md: md && (!prep || files.some((f) => f.type !== 'pdf' && f.pages > 0)), links, pdfText, pdfTextMb: PDF_WHOLE_MB, request: inp.request, reference: inp.reference, target: inp.target, library, kept: inp.pagesKept || 0 }));
     const extra = process.env.LECPAGE_STUDIO_SHOTS === '0' ? ['--no-shots'] : [];
     writeFileSync(join(bin, 'check.mjs'), `// lecpage 커넥트가 만든 검수 실행기(작업 폴더 밖이라 에이전트가 고칠 수 없어요)\nimport { pathToFileURL } from 'node:url';\nprocess.argv = [process.argv[0], ${JSON.stringify(CLI)}, 'check', ${JSON.stringify(work)}, ...${JSON.stringify(extra)}];\nawait import(pathToFileURL(${JSON.stringify(CLI)}).href);\n`);
     if (stopped()) return;

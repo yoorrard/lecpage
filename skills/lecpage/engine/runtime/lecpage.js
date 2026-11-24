@@ -685,7 +685,7 @@
         var b = el('button'); b.type = 'button';
         var img = s.querySelector('img');
         // 그림만 있는 버튼은 쪽 번호를 이름으로, 글자가 보이는 버튼은 보이는 글자가 곧 이름(접근성: 이름과 보이는 글이 같아야 함)
-        if (img) { b.setAttribute('aria-label', s.getAttribute('data-page') + '쪽'); var t = el('img'); t.loading = 'lazy'; t.alt = ''; t.src = img.src; b.appendChild(t); img._lpThumb = t; } else b.appendChild(thumbText(s));
+        if (img) { b.setAttribute('aria-label', s.getAttribute('data-page') + '쪽'); var t = el('img'); t.loading = 'lazy'; t.alt = ''; t.src = img.src; if (img.style.aspectRatio) t.className = 'is-own'; b.appendChild(t); img._lpThumb = t; } else b.appendChild(thumbText(s));
         b.addEventListener('click', function () { go(i); });
         frag.appendChild(b);
       });
@@ -764,7 +764,7 @@
     var picked = -1;
     var btns = slides.map(function (s, i) {
       var b = el('button'); b.type = 'button'; var img = s.querySelector('img');
-      if (img) { var t = el('img'); t.loading = 'lazy'; t.alt = ''; t.src = img.src; b.appendChild(t); b.appendChild(el('span', '', s.getAttribute('data-page') + '. ' + (s.getAttribute('data-title') || ''))); }
+      if (img) { var t = el('img'); t.loading = 'lazy'; t.alt = ''; t.src = img.src; if (img.style.aspectRatio) t.className = 'is-own'; b.appendChild(t); b.appendChild(el('span', '', s.getAttribute('data-page') + '. ' + (s.getAttribute('data-title') || ''))); }
       else b.appendChild(thumbText(s));
       b.addEventListener('click', function () { picked = i; ov.close(); });
       b._q = ((s.getAttribute('data-title') || '') + ' ' + (s.getAttribute('data-text') || '')).toLowerCase();
@@ -911,6 +911,32 @@
           if (on && dock.contains(doc.activeElement)) return; // 도크를 쓰는 중이면 그대로 둠
           root.classList.toggle('lp-hero-in', on);
         }, { rootMargin: '-78% 0px 0px 0px' }).observe(hero0);
+      }
+      // AI가 쓴 사이트(.lp-hero 없음): 화면을 꽉 채운 첫 화면의 아래쪽 단추(출석하고 시작하기·바로 가기)를 도크가 덮으면 처음 내릴 때까지 도크를 감춤(kit.css html.lp-dock-wait).
+      // 맨 위에 있고 더 내릴 곳이 있는 쪽에서, 도크 자리에 사이트가 놓은 누를 것이 걸릴 때만. 한 번 내리면 다시 감추지 않음(2026-11-24 실제 AI 사이트 넷 중 둘에서 첫 화면 단추가 도크 밑에 깔렸음)
+      if (!hero0 && doc.elementsFromPoint) {
+        var waitDone = false;
+        var onWaitScroll = function () { if (scrollY > 8) { waitDone = true; root.classList.remove('lp-dock-wait'); window.removeEventListener('scroll', onWaitScroll); } };
+        var dockCovers = function () {
+          if (getComputedStyle(dock).position !== 'fixed') return false; // 사이트가 자리를 정해 놓은 도크는 떠 있지 않음
+          var r = dock.getBoundingClientRect(); if (r.width < 8 || r.height < 8) return false;
+          var xs = [r.left + 10, r.left + r.width / 2, r.right - 10], ys = [r.top + 6, r.top + r.height / 2, r.bottom - 6];
+          for (var a = 0; a < xs.length; a++) for (var c = 0; c < ys.length; c++) {
+            var els = doc.elementsFromPoint(xs[a], ys[c]);
+            for (var k = 0; k < els.length; k++) {
+              var hit = els[k].closest && els[k].closest('a[href],button,input,select,textarea,summary,[role="button"]');
+              if (hit && !hit.closest('.lpk-chrome')) return true;
+            }
+          }
+          return false;
+        };
+        var waitCheck = function () {
+          if (waitDone || dock.hidden || root.classList.contains('lp-dock-wait')) return;
+          if (scrollY > 8) { waitDone = true; return; }
+          if (doc.documentElement.scrollHeight <= innerHeight + 40) return; // 내릴 곳이 없는 한 화면짜리 쪽은 그대로 둠(도크가 끝내 안 보이지 않게)
+          if (dockCovers()) { root.classList.add('lp-dock-wait'); window.addEventListener('scroll', onWaitScroll, { passive: true }); }
+        };
+        waitCheck(); setTimeout(waitCheck, 400); setTimeout(waitCheck, 1500);
       }
     }
     $$('[data-live-off]').forEach(function (n) { n.hidden = true; });
@@ -1349,7 +1375,7 @@
     doc.addEventListener('lp:tick', paintAttend);
     doc.addEventListener('lp:phase', function (e) {
       // 끝난 연수: 도크를 내리고 '지금' 줄(투표·타이머)을 정리
-      if (e.detail === 'closed' && dock) { dock.hidden = true; root.classList.remove('lp-dock-on', 'lp-hero-in'); }
+      if (e.detail === 'closed' && dock) { dock.hidden = true; root.classList.remove('lp-dock-on', 'lp-hero-in', 'lp-dock-wait'); }
       paintAttend(); drawNow();
     });
 

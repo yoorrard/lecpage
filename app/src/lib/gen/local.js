@@ -393,7 +393,8 @@ export async function fitSiteImages(blobs, pid, list, sets = [], only = null, li
   const size = new Map();
   for (const p of all) size.set(numOf(p), sizeOf(await blobs.get(pid, 'site/' + p).catch(() => null)));
   let total = 0; for (const v of size.values()) total += v;
-  if (total <= max) return { list: all, total: all.length, cut: false, over: false };
+  const last = all.reduce((m, p) => Math.max(m, numOf(p)), 0); // 마지막 쪽 번호(골라 보낼 때 커넥트에 알림: 배포한 사이트에는 여기까지 모두 있음)
+  if (total <= max) return { list: all, total: all.length, cut: false, over: false, last };
   // 꼭 보낼 쪽은 그대로 두고, 나머지에서만 고름
   const fixed = new Set([...size.keys()].filter((n) => must?.has(n)));
   let fixedBytes = 0; for (const n of fixed) fixedBytes += size.get(n);
@@ -413,7 +414,7 @@ export async function fitSiteImages(blobs, pid, list, sets = [], only = null, li
   // 그래도 넘으면(그림 한 장이 아주 큼) 큰 것부터 더 뺌: 커넥트가 사이트 크기로 거절하지 않게
   for (const n of [...keep].sort((a, b) => size.get(b) - size.get(a))) { if (sum <= room) break; keep.delete(n); sum -= size.get(n); }
   const out = all.filter((p) => keep.has(numOf(p)) || fixed.has(numOf(p)));
-  return { list: out, total: all.length, cut: out.length < all.length, over: room < 0 };
+  return { list: out, total: all.length, cut: out.length < all.length, over: room < 0, last };
 }
 /**
  * 사이트 글(HTML·CSS·JS)이 가리키는 교재 쪽 번호: 경로로 적은 것(material/p-NNN.webp)과 교재 슬라이드에서 고른 쪽(data-pages="1-10, 12").
@@ -452,9 +453,9 @@ export async function fitSiteForEdit(blobs, pid, site, sets = [], limits = null)
   const used = pagesUsed(site);
   const must = used.all ? new Set(pages.map(numOf)) : used.nums;
   const fit = await fitSiteImages(blobs, pid, pages, sets, null, limits, { must, base });
-  if (!fit.cut && !fit.over) return { only: null, total: pages.length, sent: pages.length, over: false, mb: 0 };
+  if (!fit.cut && !fit.over) return { only: null, total: pages.length, sent: pages.length, over: false, mb: 0, last: fit.last };
   let bytes = base; if (fit.over) for (const p of fit.list) bytes += sizeOf(await blobs.get(pid, 'site/' + p).catch(() => null));
-  return { only: [...others, ...fit.list], total: pages.length, sent: fit.list.length, over: fit.over, mb: Math.ceil(bytes / MiB) };
+  return { only: [...others, ...fit.list], total: pages.length, sent: fit.list.length, over: fit.over, mb: Math.ceil(bytes / MiB), last: fit.last };
 }
 const MiB = 1048576;
 const sizeOf = (v) => +(v?.size ?? v?.byteLength ?? v?.length ?? 0) || 0;

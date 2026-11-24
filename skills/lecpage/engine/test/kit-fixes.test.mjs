@@ -450,3 +450,91 @@ body{margin:0;padding:16px;background:#fff;color:#111;font:16px/1.5 sans-serif}p
     assert.match(one.message_ko, /글이 바탕과 거의 같은 색이라 안 보여요\(1\.00:1\)/);
   });
 });
+
+// ── 최종 점검(2026-11-24 밤): 실제 AI 사이트·실제 에이전트 실행에서 찾은 것 ──────────────────────────────
+// 암호로 잠근 사이트: 기억해 둔 열쇠로 바로 풀 때(새로 고침·다른 쪽·새 탭) 문서를 읽는 중에 풀린 글을 써 넣어, 잠금 화면 아래에 끝없이 덧붙었음.
+// 이 길(실제 브라우저에서 잠금 풀기)을 보는 시험이 하나도 없어 드러나지 않았음
+test('브라우저: 암호로 잠근 사이트 — 암호를 넣어 연 뒤 새로 고침·다른 쪽·새 탭에서도 한 번만, 온전히 열림(잠금 화면이 남거나 내용이 덧붙지 않음)', { skip, timeout: 120000 }, async () => {
+  const site = {
+    'index.html': PAGE('<section id="first"><h2>교재</h2><div data-lp="deck"></div></section>' + '<p class="filler">본문 줄</p>'.repeat(400)),
+    'day2.html': PAGE('<section><h2>둘째 날</h2><p id="d2">둘째 날 내용</p></section>'),
+    'material/p-001.webp': WEBP, 'material/p-002.webp': WEBP,
+  };
+  const r = K.assemble(site, META, { runtime: rt });
+  const out = await E.protectSite(r.files, '봄비연필운동장', { runtime: rt, title: '시험 연수', crypto: webcrypto, iterations: 1000 });
+  await withSite(out, async (page, base) => {
+    const errs = []; page.on('pageerror', (e) => errs.push(String(e)));
+    const state = (p = page) => p.evaluate(() => ({ ready: document.readyState, locked: document.querySelectorAll('#lp-locked,[data-lp-lock]').length, slides: document.querySelectorAll('figure.lp-slide').length, first: document.querySelectorAll('#first').length, fill: document.querySelectorAll('.filler').length, title: document.title }));
+    const opened = async (p = page) => { await p.waitForFunction(() => document.readyState === 'complete' && !document.querySelector('#lp-locked') && document.querySelector('#first, #d2'), null, { timeout: 15000 }).catch(() => { }); await p.waitForTimeout(700); return state(p); };
+    await page.goto(base);
+    await page.waitForSelector('[data-lp-lock] input[type=password]');
+    assert.equal((await state()).first, 0, '잠긴 동안에는 내용이 없음');
+    await page.fill('[data-lp-lock] input[type=password]', '틀린암호'); await page.keyboard.press('Enter');
+    await page.waitForFunction(() => /맞지 않아요/.test(document.querySelector('[data-lp-lock-msg]')?.textContent || ''));
+    await page.fill('[data-lp-lock] input[type=password]', '봄비연필운동장');
+    const rem = page.locator('[data-lp-lock] [name=remember]'); if (await rem.count()) await rem.check();
+    await page.keyboard.press('Enter');
+    const a = await opened();
+    assert.deepEqual([a.locked, a.slides, a.first, a.fill], [0, 2, 1, 400], '암호를 넣어 엶: ' + JSON.stringify(a));
+    for (let i = 0; i < 3; i++) { // 새로 고침(기억한 열쇠로 바로 풂): 문서 읽기보다 풀이가 먼저 끝나도 한 번만 씀
+      await page.reload({ waitUntil: 'commit' });
+      const b = await opened();
+      assert.deepEqual([b.ready, b.locked, b.slides, b.first, b.fill], ['complete', 0, 2, 1, 400], `새로 고침 ${i + 1}: ` + JSON.stringify(b));
+    }
+    await page.goto(base + 'day2.html', { waitUntil: 'commit' });
+    const c = await opened();
+    assert.ok(c.locked === 0 && c.ready === 'complete' && await page.locator('#d2').count() === 1, '다른 쪽: ' + JSON.stringify(c));
+    const tab = await page.context().newPage(); await tab.goto(base, { waitUntil: 'commit' });
+    const d = await opened(tab);
+    assert.deepEqual([d.ready, d.locked, d.slides, d.first], ['complete', 0, 2, 1], '새 탭(기억하기): ' + JSON.stringify(d));
+    assert.deepEqual(errs, [], '쪽 오류 없음');
+  });
+});
+
+// 떠 있는 도크(도움 요청·질문)가 화면을 꽉 채운 첫 화면의 아래쪽 단추를 덮던 것(실제 AI 사이트 넷 중 둘): 처음 내릴 때까지 감춤
+const BARE = (body) => PAGE(body).replace('<h1>시험 연수</h1>', ''); // 첫 화면이 화면 맨 위에서 시작하게(PAGE는 앞에 제목 한 줄을 둠)
+const HERO = (cta) => BARE(`<header id="hero" style="min-height:100vh;display:flex;flex-direction:column;justify-content:${cta ? 'flex-end' : 'flex-start'};padding:24px 16px 20px;box-sizing:border-box"><h1>첫 화면</h1><a id="cta" href="#qa" style="display:block;padding:16px;text-align:center;background:#222;color:#fff">출석하고 시작하기</a></header><section id="qa" style="min-height:130vh"><h2>질문</h2><div data-lp="qa"></div></section>`);
+test('브라우저: 도크가 첫 화면의 단추를 덮으면 처음 내릴 때까지 감추고(단추가 눌림), 덮지 않거나 내릴 곳이 없는 쪽은 그대로', { skip, timeout: 120000 }, async () => {
+  const dockState = (page) => page.evaluate(() => { const d = document.querySelector('.lp-dock'); const cta = document.querySelector('#cta'); const r = cta && cta.getBoundingClientRect(); const top = r ? document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) : null; return { on: document.documentElement.classList.contains('lp-dock-on'), wait: document.documentElement.classList.contains('lp-dock-wait'), opacity: d ? getComputedStyle(d).opacity : null, ctaOnTop: !!top && (top === cta || cta.contains(top)) }; });
+  // ① 아래쪽 단추를 덮는 첫 화면: 감춤 → 내리면 나타남
+  await withSite(K.assemble({ 'index.html': HERO(true) }, META, { runtime: rt }).files, async (page, base) => {
+    await page.goto(base + '?phase=during'); await page.waitForFunction(() => document.documentElement.classList.contains('lp-dock-on'));
+    await page.waitForTimeout(700);
+    const top = await dockState(page);
+    assert.ok(top.wait && top.opacity === '0' && top.ctaOnTop, '맨 위: 도크를 감추고 단추가 눌림 ' + JSON.stringify(top));
+    await page.evaluate(() => scrollTo(0, 300)); await page.waitForTimeout(600);
+    const down = await dockState(page);
+    assert.ok(!down.wait && down.opacity === '1', '내리면 나타남 ' + JSON.stringify(down));
+    await page.evaluate(() => scrollTo(0, 0)); await page.waitForTimeout(600);
+    assert.equal((await dockState(page)).wait, false, '다시 올라와도 감추지 않음(한 번만)');
+  });
+  // ② 도크 자리에 누를 것이 없는 첫 화면: 그대로 보임
+  await withSite(K.assemble({ 'index.html': HERO(false) }, META, { runtime: rt }).files, async (page, base) => {
+    await page.goto(base + '?phase=during'); await page.waitForFunction(() => document.documentElement.classList.contains('lp-dock-on'));
+    await page.waitForTimeout(1900);
+    const s = await dockState(page);
+    assert.ok(!s.wait && s.opacity === '1', '덮지 않으면 그대로 ' + JSON.stringify(s));
+  });
+  // ③ 내릴 곳이 없는 한 화면짜리 쪽: 덮더라도 감추지 않음(도크가 끝내 안 보이지 않게)
+  const one = BARE('<header style="height:calc(100vh - 16px);display:flex;flex-direction:column;justify-content:flex-end;box-sizing:border-box;padding:0 16px 8px;overflow:hidden"><a id="cta" href="#x" style="display:block;padding:16px;background:#222;color:#fff">단추</a><div hidden data-lp="qa"></div></header>');
+  await withSite(K.assemble({ 'index.html': one }, META, { runtime: rt }).files, async (page, base) => {
+    await page.goto(base + '?phase=during'); await page.waitForFunction(() => document.documentElement.classList.contains('lp-dock-on'));
+    await page.waitForTimeout(1900);
+    const s = await page.evaluate(() => ({ wait: document.documentElement.classList.contains('lp-dock-wait'), scroll: document.documentElement.scrollHeight - innerHeight }));
+    if (s.scroll <= 40) assert.equal(s.wait, false, '한 화면짜리 쪽 ' + JSON.stringify(s));
+  });
+});
+
+test('브라우저: 교재 비율과 다른 쪽의 작은 미리보기·전체 보기는 잘라 내지 않음(is-own → object-fit:contain), 같은 비율의 쪽은 전과 같이', { skip, timeout: 60000 }, async () => {
+  const r = K.assemble(deckSite([WEBP, WEBP, png(935, 1210)]), META, { runtime: rt });
+  await withSite(r.files, async (page, base) => {
+    await page.goto(base + '?phase=during');
+    await page.waitForSelector('.lp-deck.is-ready');
+    const fits = (sel) => page.evaluate((q) => [...document.querySelectorAll(q)].map((i) => [i.className, getComputedStyle(i).objectFit]), sel);
+    const th = await fits('.lp-deck-thumbs img');
+    assert.deepEqual(th, [['', 'cover'], ['', 'cover'], ['is-own', 'contain']], '작은 미리보기 ' + JSON.stringify(th));
+    await page.click('[data-deck-overview]').catch(() => { });
+    const ov = await fits('.lp-overview-grid img');
+    if (ov.length) assert.deepEqual(ov, [['', 'cover'], ['', 'cover'], ['is-own', 'contain']], '전체 보기 ' + JSON.stringify(ov));
+  });
+});
