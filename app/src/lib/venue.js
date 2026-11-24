@@ -72,7 +72,7 @@ const qrFig = (u, cap) => `<figure>${qrSvg(u)}<figcaption>${esc(cap)}</figcaptio
  * '혹시 안 열리면' 한 장(A4 한 쪽, 인쇄해 두거나 휴대폰에 저장). 꼭 필요한 것만:
  * 두 번째 주소 · 휴대폰 데이터로 접속 · 인터넷이 아예 안 될 때(ZIP·인쇄본) · 참여 기능만 안 될 때
  */
-export function kitHtml({ title, siteUrl, shareUrl = '', altUrl = '', second = '', live = false, zipName = '' }) {
+export function kitHtml({ title, siteUrl, shareUrl = '', altUrl = '', second = '', live = false, zipName = '', locked = false }) {
   const main = shareUrl || siteUrl; const alt = altUrl || second;
   const body = `<h1>혹시 안 열리면 · ${esc(title)}</h1>
 <p class="sub">연수 당일 사이트가 안 열릴 때 차례대로 해 보세요. 이 종이는 인쇄하거나 휴대폰에 저장해 두세요.</p>
@@ -85,7 +85,7 @@ export function kitHtml({ title, siteUrl, shareUrl = '', altUrl = '', second = '
 <li>강사 PC는 휴대폰 핫스팟에 이어 발표 화면을 여세요.</li>
 <li>접속 확인(위 QR)의 [결과 복사]를 기관 정보 담당자에게 보내면 무엇을 열어야 하는지 바로 알 수 있어요.</li></ol>
 <h2>2. 인터넷이 아예 안 되면</h2>
-<ul><li>사이트 ZIP${zipName ? `(${esc(zipName)})` : ''}을 USB에 담아 강사 PC에서 압축을 풀고 index.html을 여세요. 교재·일정·실습·프롬프트 복사는 그대로 돼요.</li>
+<ul><li>${locked ? '잠그지 않은 ZIP' : '사이트 ZIP'}${zipName ? `(${esc(zipName)})` : ''}을 USB에 담아 강사 PC에서 압축을 풀고 index.html을 여세요. 교재·일정·실습·프롬프트 복사는 그대로 돼요.${locked ? ' 암호로 잠근 ZIP은 파일로 열면 교재 그림이 보이지 않으니, lecpage의 [혹시 안 열리면]에서 [잠그지 않은 ZIP 다운로드]로 받은 것을 쓰세요.' : ''}</li>
 <li>인쇄용 실습·프롬프트 모음(강사용 파일의 실습프롬프트모음.html)을 나눠 주세요.</li></ul>
 ${live ? `<h2>3. 참여 기능(질문·투표)만 안 되면</h2>
 <ul><li>교재·실습은 그대로예요. 참가자 화면에 '서버에 닿지 않아요' 한 줄이 떠요.</li>

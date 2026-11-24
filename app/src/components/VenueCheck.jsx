@@ -82,9 +82,10 @@ export function RescueKit({ p, update, url, shareUrl, onZip, busy }) {
   const alt = p.deploy?.target === 'lecpage' ? p.deploy?.lecpage?.altUrl || '' : '';
   const [second, setSecond] = useState(p.deploy?.second || '');
   const live = (bp.live?.features || []).length > 0;
+  const locked = bp.access?.mode === 'password'; // 잠근 ZIP은 파일로 열면 교재 그림이 안 보임 → USB에는 잠그지 않은 ZIP
   const okSecond = !second || /^https:\/\/[^\s/]+\.[^\s]+$/.test(second.trim());
   const save = () => { if (!okSecond) return; update((cur) => ({ deploy: { ...(cur.deploy || {}), second: second.trim() } })); toast(second.trim() ? '두 번째 주소를 적어 뒀어요.' : '두 번째 주소를 지웠어요.'); };
-  const kit = () => saveFile(safeName(m.title) + '_혹시안열리면.html', kitHtml({ title: m.title, siteUrl: url, shareUrl, altUrl: alt, second: (p.deploy?.second || '').trim(), live, zipName: safeName(m.title) + '.zip' }), 'text/html;charset=utf-8');
+  const kit = () => saveFile(safeName(m.title) + '_혹시안열리면.html', kitHtml({ title: m.title, siteUrl: url, shareUrl, altUrl: alt, second: (p.deploy?.second || '').trim(), live, zipName: safeName(m.title) + (locked ? '_잠금없음' : '') + '.zip', locked }), 'text/html;charset=utf-8');
   const print = () => saveFile(safeName(m.title) + '_실습프롬프트모음.html', (isV2(p) ? printSiteHtml(p) : printHtml(p.blueprint)), 'text/html;charset=utf-8');
   return (
     <details class="rescue">
@@ -99,12 +100,13 @@ export function RescueKit({ p, update, url, shareUrl, onZip, busy }) {
           </div>}
         <ul class="small rescue-list">
           <li>참가자에게 Wi-Fi를 끄고 휴대폰 데이터로 QR을 찍게 하면 기관·회사 Wi-Fi 필터와 상관없이 열려요. 강사 PC는 휴대폰 핫스팟에 이으세요.</li>
-          <li>인터넷이 아예 안 되면 사이트 ZIP을 USB에 담아 강사 PC에서 index.html을 열어요. 교재·실습·프롬프트 복사는 그대로 돼요.</li>
+          <li>인터넷이 아예 안 되면 {locked ? '잠그지 않은 ZIP' : '사이트 ZIP'}을 USB에 담아 강사 PC에서 index.html을 열어요. 교재·실습·프롬프트 복사는 그대로 돼요.{locked && ' 암호로 잠근 ZIP은 파일로 열면 교재 그림이 보이지 않아요.'}</li>
           {live && <li>참여 기능만 안 되면 질문은 손을 들어 받아요. 참가자 화면에는 차분한 한 줄이 뜨고, 교재·실습은 그대로예요.</li>}
         </ul>
         <div class="btn-row">
           <button type="button" class="btn btn-sm btn-primary" onClick={kit}>대비 안내 다운로드</button>
-          <button type="button" class="btn btn-sm" disabled={!!busy} onClick={onZip}>{busy === 'zip' ? '만드는 중…' : '사이트 ZIP 다운로드'}</button>
+          <button type="button" class="btn btn-sm" disabled={!!busy} onClick={() => onZip()}>{busy === 'zip' ? '만드는 중…' : '사이트 ZIP 다운로드'}</button>
+          {locked && <button type="button" class="btn btn-sm" disabled={!!busy} data-usb-zip onClick={() => onZip({ plain: true })}>잠그지 않은 ZIP 다운로드</button>}
           <button type="button" class="btn btn-sm" onClick={print}>실습·프롬프트 인쇄</button>
           {!alt && <a class="btn btn-sm btn-quiet" href="https://dash.cloudflare.com/?to=/:account/workers-and-pages/create" target="_blank" rel="noopener">Cloudflare 열기</a>}
         </div>

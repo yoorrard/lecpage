@@ -32,6 +32,8 @@ export function storageKind(e) {
   if (!e) return '';
   if (e.storage === 'blocked' || blocked) return 'blocked';
   if (e.name === 'QuotaExceededError' || e.code === 22 || /quota|storage.*full|disk.*full/i.test(String(e.message || ''))) return 'quota';
+  // 파일(Blob) 저장을 막는 창(일부 브라우저의 사생활 보호 창): 저장소는 열리지만 교재·쪽 그림을 넣을 때 거절됨
+  if (/Blob\/File data|preparing Blob/i.test(String(e.message || ''))) return 'blocked';
   return '';
 }
 export const STORAGE_MSG = {
@@ -49,6 +51,9 @@ const tell = (m) => { try { bc?.postMessage(m); } catch { /* 알림만 못 함 *
 /** 다른 탭에서 연수를 저장(type 'saved', at)하거나 지웠을 때(type 'deleted') */
 export function onProjectChange(f) { hear.add(f); return () => hear.delete(f); }
 
+/** 거래가 실패한 까닭. onerror는 거래가 끝나기 전에 불려 t.error가 아직 null일 수 있음(그때는 실패한 요청의 오류).
+ * 늘 Error를 돌려줌: null로 거절하면 받는 쪽의 e.kind·e.name에서 다시 오류가 나 '읽는 중'이 끝나지 않고 남음(Blob 저장을 막는 브라우저에서 실제로 멈췄음) */
+const txError = (t, ev, thrown) => thrown || t.error || ev?.target?.error || new Error('브라우저 저장소에 쓰지 못했어요.');
 function tx(store, mode, fn) {
   return open().then((db) => new Promise((resolve, reject) => {
     const t = db.transaction(store, mode);
@@ -56,11 +61,11 @@ function tx(store, mode, fn) {
     let out;
     Promise.resolve(fn(s)).then((v) => { out = v; });
     t.oncomplete = () => resolve(out);
-    t.onerror = () => reject(t.error);
-    t.onabort = () => reject(t.error);
+    t.onerror = (ev) => reject(txError(t, ev));
+    t.onabort = (ev) => reject(txError(t, ev));
   }));
 }
-const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+const req = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error || new Error('브라우저 저장소에서 읽지 못했어요.')); });
 
 export const projects = {
   all: () => tx('projects', 'readonly', (s) => req(s.getAll())).then((a) => (a || []).sort((x, y) => (y.updatedAt || 0) - (x.updatedAt || 0))),
@@ -82,8 +87,8 @@ export const projects = {
       try { s.put({ ...p, updatedAt: at }); out = { at }; } catch (e) { thrown = e; try { t.abort(); } catch { /* 이미 끝남 */ } }
     };
     t.oncomplete = () => { if (out?.at && !out.changed) tell({ type: 'saved', id: p.id, at: out.at }); resolve(out || { gone: true }); };
-    t.onerror = () => reject(thrown || t.error);
-    t.onabort = () => reject(thrown || t.error);
+    t.onerror = (ev) => reject(txError(t, ev, thrown));
+    t.onabort = (ev) => reject(txError(t, ev, thrown));
   })),
   /**
    * 한 트랜잭션에서 읽고 고쳐 씀: fn(지금 판) → 바꿀 칸(동기, 없으면 쓰지 않음). 연수가 없으면 null.
@@ -102,8 +107,8 @@ export const projects = {
       } catch (e) { thrown = e; out = null; try { t.abort(); } catch { /* 이미 끝남 */ } }
     };
     t.oncomplete = () => { if (out) tell({ type: 'saved', id, at: out.updatedAt }); resolve(out); };
-    t.onerror = () => reject(thrown || t.error);
-    t.onabort = () => reject(thrown || t.error);
+    t.onerror = (ev) => reject(txError(t, ev, thrown));
+    t.onabort = (ev) => reject(txError(t, ev, thrown));
   })),
   remove: async (id) => {
     await tx('projects', 'readwrite', (s) => req(s.delete(id)));

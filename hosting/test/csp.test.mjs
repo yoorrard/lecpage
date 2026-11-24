@@ -87,7 +87,7 @@ test('사이트 쪽 CSP에 들어가는 값은 모양을 확인함(머리글을 
   assert.deepEqual(roomSources({ host: HOST, site: '../x', pages: true }).media, []);
   assert.deepEqual(roomSources({ live: ['https://evil.example/x', "https://a.example 'unsafe-inline'", 'https:', 'data:', 'https://*.example.kr', 'wss://a.example:99999x', 'https://ok.workers.dev', 'wss://live.school.kr:8443'] }).connect, ['https://ok.workers.dev', 'wss://live.school.kr:8443']);
   const csp = siteCsp({ host: 'https://h.example; script-src *', code: 'X;Y' });
-  assert.ok(!csp.includes('script-src *') && csp.split(';').length === 13, csp);
+  assert.ok(!csp.includes('script-src *') && csp.split(';').length === 14, csp); // 13개 + upgrade-insecure-requests(서버 머리글에만)
 });
 
 test('사이트가 적은 바깥 실시간 서버: 강사 계정 모양(workers.dev·supabase.co·Apps Script)과 자기 도메인의 https 참여 기능 서버, 이 호스트는 빼고', () => {

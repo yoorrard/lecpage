@@ -183,8 +183,8 @@ function useIngest(p, update, first = []) {
     setBusy('교재를 읽는 중이에요…'); setPct(3); setExtra(incomingRows(files));
     try { await ingestAll(files); } catch (e) {
       console.error(e);
-      if (e.kind === 'net') toast('교재 읽기 도구를 못 받았어요. 인터넷 연결을 확인하고 새로 고침한 뒤 다시 넣어 주세요.');
-      else if (!e.kind) toast(STORAGE_MSG[storageKind(e)] || '교재를 읽지 못했어요. 새로 고침한 뒤 다시 넣어 주세요.');
+      if (e?.kind === 'net') toast('교재 읽기 도구를 못 받았어요. 인터넷 연결을 확인하고 새로 고침한 뒤 다시 넣어 주세요.');
+      else if (!e?.kind) toast(STORAGE_MSG[storageKind(e)] || '교재를 읽지 못했어요. 새로 고침한 뒤 다시 넣어 주세요.');
     }
     setBusy(''); setPct(0); setExtra([]);
   }
@@ -228,8 +228,8 @@ function useIngest(p, update, first = []) {
     try { await ingestAll(again, { tries: pend.reduce((n, f) => Math.max(n, f.tries || 0), 0) + 1 }); }
     catch (e) {
       console.error(e);
-      if (e.kind === 'net') toast('교재 읽기 도구를 못 받았어요. 인터넷 연결을 확인하고 새로 고침한 뒤 다시 눌러 주세요.');
-      else if (!e.kind) toast(STORAGE_MSG[storageKind(e)] || '교재를 끝까지 읽지 못했어요. 그 줄에서 [이어서 읽기]나 삭제를 눌러 주세요.');
+      if (e?.kind === 'net') toast('교재 읽기 도구를 못 받았어요. 인터넷 연결을 확인하고 새로 고침한 뒤 다시 눌러 주세요.');
+      else if (!e?.kind) toast(STORAGE_MSG[storageKind(e)] || '교재를 끝까지 읽지 못했어요. 그 줄에서 [이어서 읽기]나 삭제를 눌러 주세요.');
     }
     setBusy(''); setPct(0);
   }

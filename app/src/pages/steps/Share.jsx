@@ -209,7 +209,7 @@ export function StepShare({ p, update, go, stale, stopped, storeNow }) {
   const setAccess = (mode) => update((cur) => ({ ...patchDeploy(cur, (b) => ({ ...b, access: { mode } })), sitePassword: mode === 'password' && !cur.sitePassword ? friendlyPassword() : cur.sitePassword }));
 
   /** 배포할 사이트 파일: AI가 만든 사이트(+교재 쪽 그림·올린 사진)를 연수 정보·배포 설정과 함께 조립(엔진 assemble) */
-  async function buildFiles({ liveOff = false, live = null, processor = null, dry = false, target: to = '', view = '' } = {}) {
+  async function buildFiles({ liveOff = false, live = null, processor = null, dry = false, target: to = '', view = '', plain = false } = {}) {
     const b = JSON.parse(JSON.stringify(bp));
     if (!dry) built.current = b.meta?.shortUrl || ''; // 이번에 만든 사이트에 들어간 짧은 주소(배포한 뒤 달라지면 다시 배포하라고 알림)
     let privacy = b.privacy && Object.keys(b.privacy).length ? b.privacy : null;
@@ -264,7 +264,8 @@ export function StepShare({ p, update, go, stale, stopped, storeNow }) {
     if (!r.files?.['index.html']) throw new Error((r.errors || []).map((e) => e.message_ko).join(' ') || '사이트를 조립하지 못했어요. 새로 고침한 뒤 다시 눌러 주세요.');
     let files = r.files;
     if (!dry && to) { setProg({ step: '글꼴 담는 중', pct: 3 }); const f = await withFonts(files, { target: to, view }); files = f.files; setFontNote(f.note); }
-    if (b.access?.mode === 'password') {
+    // plain: USB(파일)·내부망 http 서버에서 쓸 ZIP — 그런 곳에서는 잠금을 풀 수 없어 잠그지 않고 조립(강사가 [잠그지 않은 ZIP 다운로드]를 누른 때만)
+    if (b.access?.mode === 'password' && !plain) {
       if (!p.sitePassword || [...p.sitePassword].length < 4) throw new Error('암호를 4자 이상 정해 주세요.');
       setProg({ step: '내용 잠그는 중', pct: 5 });
       files = await E.protectSite(files, p.sitePassword, { runtime: await loadRuntime(), title: b.meta.title });
@@ -310,7 +311,7 @@ export function StepShare({ p, update, go, stale, stopped, storeNow }) {
   const goLive = () => { setOpen((o) => ({ ...o, live: true })); setTimeout(() => { const li = document.getElementById('live-setup'); li?.scrollIntoView({ block: 'start', behavior: 'smooth' }); (li?.querySelector('.live-way-reco, .live-way-h') || li?.querySelector('.ready-t'))?.focus({ preventScroll: true }); }, 80); };
   async function zip(opts = {}) {
     setBusy('zip');
-    try { const r = await buildFiles({ target: 'zip', ...opts }); saveFile(safeName(p.title) + '.zip', E.zipFiles(r.files), 'application/zip'); toast('사이트 파일(ZIP)을 다운로드했어요.'); }
+    try { const r = await buildFiles({ target: 'zip', ...opts }); saveFile(safeName(p.title) + (opts.plain ? '_잠금없음' : '') + '.zip', E.zipFiles(r.files), 'application/zip'); toast(opts.plain ? '잠그지 않은 ZIP을 다운로드했어요.' : '사이트 파일(ZIP)을 다운로드했어요.'); }
     catch (e) { toast(e.message); }
     setBusy(''); setProg(null);
   }
@@ -331,7 +332,7 @@ export function StepShare({ p, update, go, stale, stopped, storeNow }) {
       const url = p.deploy?.lastUrl;
       if (url) {
         const pw = bp.access?.mode === 'password' ? p.sitePassword : '';
-        files['혹시안열리면.html'] = kitHtml({ title: p.title, siteUrl: url, shareUrl: pw ? E.unlockUrl(url.replace(/\/?$/, '/'), pw) : '', altUrl: p.deploy?.target === 'lecpage' ? p.deploy?.lecpage?.altUrl || '' : '', second: p.deploy?.second || '', live, zipName: safeName(p.title) + '.zip' });
+        files['혹시안열리면.html'] = kitHtml({ title: p.title, siteUrl: url, shareUrl: pw ? E.unlockUrl(url.replace(/\/?$/, '/'), pw) : '', altUrl: p.deploy?.target === 'lecpage' ? p.deploy?.lecpage?.altUrl || '' : '', second: p.deploy?.second || '', live, zipName: safeName(p.title) + (pw ? '_잠금없음' : '') + '.zip', locked: !!pw });
       }
       saveFile(safeName(p.title) + '_강사용.zip', E.zipFiles(files), 'application/zip');
       toast('강사용 파일을 다운로드했어요.');
@@ -515,7 +516,7 @@ export function StepShare({ p, update, go, stale, stopped, storeNow }) {
       {stale && <p class="small warn-line" role="status" data-stale-note>다른 탭에서 이 연수를 고쳤어요. [이 탭으로 다시 불러오기]를 누르면 여기서 이어서 배포할 수 있어요.</p>}
       <fieldset class="plain-fieldset" disabled={!!stale} inert={!!stale}>{/* inert: 단추처럼 보이는 링크(새 구글 시트 열기 등)도 함께 잠금 */}
       {p.demo && <DemoPublish p={p} buildFiles={buildFiles} />}
-      {p.deploy?.lastUrl && <Success p={p} bp={bp} update={update} onEdit={() => go(2)} onRepublish={republish} onPrimary={setPrimary} busy={busy} onZip={() => guard((o) => zip(o), false, 'zip')} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} exp={exp} days={info?.limits?.days} />}
+      {p.deploy?.lastUrl && <Success p={p} bp={bp} update={update} onEdit={() => go(2)} onRepublish={republish} onPrimary={setPrimary} busy={busy} onZip={(x) => guard((o) => zip(x && x.plain === true ? { ...o, plain: true } : o), false, 'zip')} instantOn={!!autoLive || p.deploy?.target === 'lecpage'} fontNote={fontNote} exp={exp} days={info?.limits?.days} />}
 
       <Sheet>
         <div class="stack">

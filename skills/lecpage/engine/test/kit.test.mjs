@@ -142,7 +142,10 @@ test('CSP·_headers: AI 쪽은 self 스크립트·form-action none·실제로 �
   has("script-src 'self' file:;"); has("style-src 'self' file: 'unsafe-inline';"); has("font-src 'self' file: data:;"); has("frame-src 'none'");
   assert.ok(!/jsdelivr|googleapis|youtube|vimeo/.test(csp), csp);
   has("img-src 'self' file: data: blob: https://live.example.org"); has("connect-src 'self' file: https://live.example.org wss://live.example.org");
-  has("form-action 'none'"); has("object-src 'none'"); has("worker-src 'none'"); has("base-uri 'none'"); has('upgrade-insecure-requests');
+  has("form-action 'none'"); has("object-src 'none'"); has("worker-src 'none'"); has("base-uri 'none'");
+  // 섞인 콘텐츠 올려 받기는 쪽(meta)에 넣지 않음: http로만 여는 내부망 서버·NAS·Safari의 localhost에서 같은 주소의 CSS·JS까지 https로 받아 사이트가 깨짐. https 호스팅이 읽는 _headers에만
+  assert.ok(!csp.includes('upgrade-insecure-requests'), 'meta에는 없음');
+  assert.match(r.files['_headers'], /\n\/index\.html\n  Content-Security-Policy: [^\n]*; upgrade-insecure-requests\n/, '_headers에는 있음');
   assert.ok(!/script-src[^;]*'unsafe-inline'/.test(csp));
   // 쓰는 것만 엶: gsap·구글 글꼴·유튜브(→ nocookie)
   const site = fullSite();

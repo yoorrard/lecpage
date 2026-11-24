@@ -103,6 +103,18 @@ const pick = async (p, label) => { if (!(await p.locator('.pub-opt').count()) &&
     ok('manual url saved', await p.locator('.success .big-url').innerText() === 'https://maum-class.pages.dev/');
     await pick(p, 'ZIP 다운로드');
     console.log('zip steps:', (await p.locator('.publish .walk-h').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ')).join(' / '), '|', (await p.locator('.pub-about').innerText()).replace(/\s+/g, ' '));
+    // 암호로 잠근 사이트: 잠근 ZIP은 파일(USB)로 열면 교재 그림을 풀 수 없음 → [잠그지 않은 ZIP 다운로드]를 한 줄로 따로 줌(잠그지 않은 사이트에는 그 줄이 없음)
+    ok('open site: no USB zip line', await p.locator('.publish [data-usb-zip]').count() === 0);
+    await p.click('.ready-i:has(.ready-t:has-text("공개 범위")) button:has-text("바꾸기")'); await p.locator('input[name=access]').nth(1).check(); await p.fill('input[autocomplete="new-password"]', 'check-2468'); await p.waitForTimeout(600);
+    if (!(await p.locator('.publish .walk-b button:has-text("사이트 ZIP 다운로드"):visible').count())) await p.click('.publish .walk-h:has-text("사이트 파일 다운로드")');
+    ok('locked site: USB zip line with one primary still', await p.locator('.publish [data-usb-zip]').count() === 1 && await p.locator('.publish .btn-primary:visible').count() === 1, (await p.locator('.publish [data-usb-zip]').innerText().catch(() => '')).replace(/\s+/g, ' '));
+    const grabZip = async (sel) => { const [d] = await Promise.all([p.waitForEvent('download', { timeout: 60000 }), (async () => { await p.click(sel); await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {}); })()]); const f = await d.path(); return { name: d.suggestedFilename(), index: require('child_process').execFileSync('unzip', ['-p', f, 'index.html'], { maxBuffer: 64 << 20 }).toString() }; };
+    const usb = await grabZip('.publish [data-usb-zip] button');
+    ok('USB zip is not locked (opens from a file)', !/id="lp-locked"/.test(usb.index) && /data-lp=|lpk/.test(usb.index), usb.name);
+    await p.waitForTimeout(800);
+    if (!(await p.locator('.publish .walk-b button:has-text("사이트 ZIP 다운로드"):visible').count())) await p.click('.publish .walk-h:has-text("사이트 파일 다운로드")');
+    const lockedZip = await grabZip('.publish .walk-b button:has-text("사이트 ZIP 다운로드")');
+    ok('the normal zip of a locked site stays locked', /id="lp-locked"/.test(lockedZip.index), lockedZip.name);
     console.log('errors', errs); await ctx.close();
   }
   // ── 참여 기능 연결(세 방법) + 설정의 연결 창: 1440·390 ──

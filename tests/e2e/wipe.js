@@ -66,6 +66,29 @@ async function making(b) {
     L.ok('delete: 화면 오류 없음', errs.length === 0, errs.join(' | ').slice(0, 300));
     await ctx.close();
   }
+  // ── 저장소가 파일 쓰기를 거절할 때(일부 브라우저의 사생활 보호 창): 교재 넣기가 '읽는 중'에 남지 않고 까닭을 알림.
+  //    거래의 onerror는 t.error가 아직 null일 때 불려 null로 거절됐고, 받는 쪽이 e.kind를 읽다 다시 오류가 나 '쪽 그림 만드는 중'이 끝나지 않았음(WebKit에서 찾음)
+  {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, locale: 'ko-KR' }); await L.mockAi(ctx);
+    const p = await ctx.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(String(e).slice(0, 160)));
+    await p.addInitScript(() => {
+      const put = IDBObjectStore.prototype.put, add = IDBObjectStore.prototype.add;
+      const bin = (v, d = 0) => v instanceof Blob || v instanceof ArrayBuffer || ArrayBuffer.isView(v) || (d < 3 && v && typeof v === 'object' && Object.values(v).some((x) => bin(x, d + 1)));
+      // 파일이 든 값은 한 번 넣은 뒤 같은 키로 add → 요청이 나중에(비동기로) 실패하는 길을 만듦
+      IDBObjectStore.prototype.put = function (value) { const r = put.apply(this, arguments); if (!bin(value)) return r; window.__failed = (window.__failed || 0) + 1; try { return add.apply(this, arguments); } catch (e) { return r; } };
+    });
+    await p.goto(L.BASE, { waitUntil: 'load' });
+    await p.setInputFiles('.ld-hero input[type=file][multiple]', [L.FIX + '/workshop.pdf']);
+    let busy = true, said = ''; const t0 = Date.now();
+    while (Date.now() - t0 < 30000) {
+      busy = await p.locator('.drop-busy').count() > 0;
+      const t = (await p.locator('.toast, [role=status], [role=alert]').allInnerTexts()).join(' | '); if (/읽지 못했어요|저장이 막혀|저장 공간/.test(t)) said = t.replace(/\s+/g, ' ').slice(0, 200);
+      if (!busy && said) break; await sleep(400);
+    }
+    L.ok('storage refuses files: reading does not stay busy, and says why', !busy && !!said && await p.evaluate(() => window.__failed > 0), `busy ${busy} · ${said}`);
+    L.ok('storage refuses files: no null error in the handler', !errs.some((e) => /reading 'kind'|of null/.test(e)), errs.join(' | ').slice(0, 300));
+    await ctx.close();
+  }
   await b.close();
   process.exit(L.summary() ? 1 : 0);
 })().catch((e) => { console.error('ERR', e); process.exit(2); });

@@ -43,7 +43,7 @@ async function withSite(files, fn, { width = 390, scheme = 'light' } = {}) {
   const browser = await chromium.launch();
   try {
     const ctx = await browser.newContext({ viewport: { width, height: width < 600 ? 844 : 800 }, colorScheme: scheme });
-    await fn(await ctx.newPage(), `http://127.0.0.1:${srv.address().port}/`);
+    await fn(await ctx.newPage(), `http://127.0.0.1:${srv.address().port}/`, dir);
   } finally { await browser.close(); srv.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 }
 
@@ -494,6 +494,31 @@ test('브라우저: 암호로 잠근 사이트 — 암호를 넣어 연 뒤 새�
     await tab.goto(base + 'screen.html', { waitUntil: 'commit' });
     await tab.waitForFunction(() => document.readyState === 'complete' && !document.querySelector('#lp-locked') && document.body && document.body.children.length > 0, null, { timeout: 15000 });
     assert.equal(await tab.locator('#lp-locked,[data-lp-lock]').count(), 0, '발표 화면이 풀림');
+    assert.deepEqual(errs, [], '쪽 오류 없음');
+  });
+});
+
+// 암호로 잠근 사이트를 USB에서 파일로 열면(file:) 브라우저가 옆 파일 읽기를 막아 잠긴 교재 그림을 풀 수 없음: 빈 그림으로 두지 않고 까닭을 한 줄로.
+// (앱은 그래서 잠근 사이트에 [잠그지 않은 ZIP 다운로드]를 따로 줌)
+test('브라우저: 암호로 잠근 사이트를 파일로 열면 — 암호는 풀리고, 잠긴 교재 그림은 못 푼다고 한 줄로 알림(웹 주소에서는 알림 없이 그림이 풀림)', { skip, timeout: 120000 }, async () => {
+  const site = { 'index.html': PAGE('<section id="first"><h2>교재</h2><div data-lp="deck"></div></section>'), 'material/p-001.webp': WEBP, 'material/p-002.webp': WEBP };
+  const r = K.assemble(site, META, { runtime: rt });
+  const out = await E.protectSite(r.files, '봄비연필운동장', { runtime: rt, title: '시험 연수', crypto: webcrypto, iterations: 1000 });
+  await withSite(out, async (page, base, dir) => {
+    const errs = []; page.on('pageerror', (e) => errs.push(String(e)));
+    const unlock = async (url) => {
+      await page.goto(url); await page.waitForSelector('[data-lp-lock] input[type=password]');
+      await page.fill('[data-lp-lock] input[type=password]', '봄비연필운동장'); await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.readyState === 'complete' && !document.querySelector('#lp-locked') && document.querySelector('#first'), null, { timeout: 15000 });
+      await page.waitForTimeout(1200);
+      return page.evaluate(() => ({ note: (document.querySelector('[data-lp-file-note]') || {}).textContent || '', left: document.querySelectorAll('[data-lp-enc-src]').length, shown: Array.from(document.querySelectorAll('figure.lp-slide img')).filter((i) => /^blob:/.test(i.src) && i.naturalWidth > 1).length }));
+    };
+    const f = await unlock('file://' + path.join(dir, 'index.html'));
+    assert.match(f.note, /파일로 열어서 암호로 잠근 교재 그림·자료는 보이지 않아요/, '파일로 열면 까닭을 알림: ' + JSON.stringify(f));
+    assert.equal(f.shown, 0, '파일 주소에서는 그림을 풀 수 없음(그래서 알림)');
+    const h = await unlock(base);
+    assert.equal(h.note, '', '웹 주소에서는 알림 없음');
+    assert.ok(h.shown >= 1 && h.left === 0, '웹 주소에서는 그림이 풀림: ' + JSON.stringify(h));
     assert.deepEqual(errs, [], '쪽 오류 없음');
   });
 });

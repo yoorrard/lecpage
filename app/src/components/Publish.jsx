@@ -1041,8 +1041,13 @@ function Manual({ p, busy, guard, done, zip, kind }) {
   const full = /^https?:\/\//i.test(url.trim()) ? url.trim() : url.trim() ? `https://${url.trim()}` : '';
   const ok = /^https?:\/\/[^\s/]+\.[^\s]+$/.test(full);
   const cf = kind === 'cloudflare';
+  // 암호로 잠근 사이트는 https 주소에서만 열림: 파일(USB)로 열면 교재 그림을 풀 수 없고(브라우저가 옆 파일 읽기를 막음) http 주소에서는 잠금 풀기가 안 됨 → 그런 곳에는 잠그지 않은 ZIP
+  const locked = !cf && deployView(p)?.access?.mode === 'password';
   const get = { t: '사이트 파일 다운로드', next: false,
-    body: <p><button class="btn btn-sm btn-primary" disabled={!!busy} aria-busy={busy === 'zip' ? 'true' : undefined} onClick={() => guard((o) => { setAt(1); return zip(o); }, false, 'zip')}>{busy === 'zip' ? '만드는 중…' : '사이트 ZIP 다운로드'}</button> {cf ? '압축은 풀지 않아요.' : '받은 파일의 압축을 풀어요.'}</p> };
+    body: <>
+      <p><button class="btn btn-sm btn-primary" disabled={!!busy} aria-busy={busy === 'zip' ? 'true' : undefined} onClick={() => guard((o) => { setAt(1); return zip(o); }, false, 'zip')}>{busy === 'zip' ? '만드는 중…' : '사이트 ZIP 다운로드'}</button> {cf ? '압축은 풀지 않아요.' : '받은 파일의 압축을 풀어요.'}</p>
+      {locked && <p class="small" data-usb-zip>암호로 잠근 사이트는 https 주소에서만 열려요. USB나 내부망(http) 서버에서 쓸 때는 <button type="button" class="btn-link small" disabled={!!busy} onClick={() => guard((o) => { setAt(1); return zip({ ...o, plain: true }); }, false, 'zip')}>잠그지 않은 ZIP 다운로드</button>를 눌러요.</p>}
+    </> };
   const save = { t: prev ? '배포한 주소 확인하기' : '배포한 주소 적기',
     body: <>
       <p>{prev ? '주소가 바뀌었으면 고쳐 주세요.' : '배포한 주소를 적으면 QR과 안내 문구를 만들어요.'}</p>

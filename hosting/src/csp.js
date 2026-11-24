@@ -123,6 +123,8 @@ export function siteCsp(c = {}) {
     "base-uri 'none'",
     "form-action 'none'",
     "object-src 'none'",
+    // 엔진은 이 지시어를 meta에 넣지 않음(http로 여는 내부망 서버에서 사이트가 깨짐). 여기는 늘 https라 서버가 붙임
+    'upgrade-insecure-requests',
   ].join('; ');
 }
 
@@ -142,6 +144,7 @@ export function auxCsp({ noFrame = false } = {}) {
     "base-uri 'none'",
     "form-action 'none'",
     "object-src 'none'",
+    'upgrade-insecure-requests',
   ];
   if (noFrame) p.push("frame-ancestors 'none'");
   return p.join('; ');

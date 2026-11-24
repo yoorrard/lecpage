@@ -86,14 +86,14 @@ test('CSV 수식 막기: = + - @ 탭·CR, 앞 빈칸·전각 기호까지. 받�
   assert.ok(g.startsWith('\uFEFF질문,작성자\r\n'));
 });
 
-test('쪽별 CSP: 참가자·강사·발표 화면은 연결한 참여 기능 서버로만 보냄(접속 확인만 https 전체), 섞인 콘텐츠 올려 받기', () => {
+test('쪽별 CSP: 참가자·강사·발표 화면은 연결한 참여 기능 서버로만 보냄(접속 확인만 https 전체), 섞인 콘텐츠 올려 받기는 meta에 없음', () => {
   const csp = (files, f) => /Content-Security-Policy" content="([^"]+)"/.exec(files[f])[1];
   const conn = (s) => /connect-src ([^;]+)/.exec(s)[1].trim().split(/\s+/);
   const bp = (live) => ({ live });
   const http = bpBuild(bp({ provider: 'http', url: 'https://live.example.workers.dev', code: 'CSP1', features: ['qa'] })).files;
   for (const f of ['index.html', 'console.html', 'screen.html', 'poster.html', 'privacy.html']) {
     assert.deepEqual(conn(csp(http, f)), ["'self'", 'file:', 'https://live.example.workers.dev', 'wss://live.example.workers.dev'], f);
-    assert.match(csp(http, f), /upgrade-insecure-requests/);
+    assert.doesNotMatch(csp(http, f), /upgrade-insecure-requests/, f + ': meta에는 넣지 않음(http로 여는 서버에서 사이트가 깨짐)');
   }
   assert.ok(conn(csp(http, 'check.html')).includes('https:'));
   const sb = bpBuild(bp({ provider: 'supabase', url: 'https://abcd.supabase.co', anonKey: 'sb_publishable_x', code: 'CSP2', features: ['qa'] })).files;

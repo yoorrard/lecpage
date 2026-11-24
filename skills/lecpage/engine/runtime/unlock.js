@@ -37,9 +37,16 @@
     // 문서를 아직 읽는 중이면 다 읽을 때까지 기다림. 기억해 둔 열쇠로 바로 풀 때(새로 고침·다른 쪽·다음 방문)는 풀이가 문서 읽기보다 먼저 끝나는데,
     // 읽는 중의 doc.open()은 브라우저가 무시하고 doc.write()는 읽던 자리에 끼워 넣음 → 잠금 화면 아래에 풀린 글이 붙고, 그 글 속의 이 스크립트가
     // 아직 남아 있는 잠금 화면을 보고 또 풀어 끝없이 덧붙었음(2026-11-24 실제 에이전트 실행에서 찾음). 암호를 직접 넣을 때는 이미 다 읽은 뒤라 드러나지 않았음
+    // 다 읽은 것(DOMContentLoaded)만으로는 모자라 쪽을 다 받을 때(load)까지 기다림: 그 전에 다시 쓰면 Firefox는 load를 끝내 내지 않아
+    // 풀린 사이트의 window load 듣기가 돌지 않고 탭이 '읽는 중'으로 남음. 느린 망에서 잠금 화면의 글꼴을 기다리느라 내용이 늦지 않게, 읽은 뒤 1.5초면 넘어감
     var parsed = function () {
-      if (doc.readyState !== 'loading') return Promise.resolve();
-      return new Promise(function (ok) { doc.addEventListener('DOMContentLoaded', function () { setTimeout(ok, 0); }); });
+      if (doc.readyState === 'complete') return Promise.resolve();
+      return new Promise(function (ok) {
+        var done = false, go = function () { if (!done) { done = true; setTimeout(ok, 0); } };
+        window.addEventListener('load', go);
+        var late = function () { setTimeout(go, 1500); };
+        if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', late); else late();
+      });
     };
     var open = function (key, raw, remember) {
       return decrypt(key, blob).then(function (buf) { return parsed().then(function () { return buf; }); }).then(function (buf) {
@@ -76,7 +83,16 @@
 
   // ── 2) 풀린 페이지: 잠긴 그림·자료 채우기 ─────────────────────────
   var nodes = Array.prototype.slice.call(doc.querySelectorAll('[data-lp-enc-src],[data-lp-enc-href]'));
-  if (!nodes.length || !subtle) return;
+  if (!nodes.length) return;
+  // 파일로 연 사이트(USB의 index.html): 브라우저가 옆 파일을 읽게 해 주지 않아 잠긴 그림·자료를 풀 수 없음 → 빈 그림으로 두지 않고 까닭을 한 줄로
+  if (location.protocol === 'file:') {
+    var note = doc.createElement('p'); note.setAttribute('role', 'status'); note.setAttribute('data-lp-file-note', '');
+    note.textContent = '파일로 열어서 암호로 잠근 교재 그림·자료는 보이지 않아요. 잠그지 않은 ZIP을 쓰거나 https 주소로 열어 주세요.';
+    note.style.cssText = 'margin:0;padding:10px 16px;box-sizing:border-box;width:100%;flex:0 0 100%;grid-column:1/-1;font:500 14px/1.5 system-ui,sans-serif;background:#fff4ce;color:#3b2f00;text-align:center;position:relative;z-index:2147483000';
+    if (doc.body) doc.body.insertBefore(note, doc.body.firstChild);
+    return;
+  }
+  if (!subtle) return;
   var tag = doc.querySelector('script[data-lp-assets]');
   var saltKey = tag ? getSaved(tag.getAttribute('data-lp-assets')) : '';
   if (!saltKey) return;

@@ -69,8 +69,9 @@ export function usedSources(texts = [], { provider = '' } = {}) {
   const frames = FRAME_SOURCES.filter((o) => all.includes(o.replace(/^https:/, '')) || (o.includes('youtube') && /\/\/(?:www\.)?(?:youtube\.com\/embed|youtu\.be)\//.test(all)));
   return { scripts, fonts, fontFiles, frames };
 }
-/** 사이트 CSP(AI 쪽용). 엔진 보조 쪽은 엔진 CSP(render/shell.js cspPolicy)를 그대로 씀. used(usedSources 결과)가 없으면 허용 목록 전부 */
-export function kitCsp(bp, { live = true, used = null } = {}) {
+/** 사이트 CSP(AI 쪽용). 엔진 보조 쪽은 엔진 CSP(render/shell.js cspPolicy)를 그대로 씀. used(usedSources 결과)가 없으면 허용 목록 전부.
+ * header: 응답 머리글(_headers)용 — https로만 내보내는 곳이라 섞인 콘텐츠 올려 받기를 붙임. meta에는 넣지 않음(http로 여는 내부망 서버·NAS·Safari의 localhost에서 사이트가 깨짐) */
+export function kitCsp(bp, { live = true, used = null, header = false } = {}) {
   const lan = servedOverLan(bp);
   const origins = live ? liveOrigins(bp) : [];
   const httpLive = origins.filter((x) => /^https?:/.test(x));
@@ -88,7 +89,7 @@ export function kitCsp(bp, { live = true, used = null } = {}) {
     `frame-src ${u.frames.length ? u.frames.join(' ') : "'none'"}`,
     "worker-src 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'none'",
   ];
-  if (!lan) p.push('upgrade-insecure-requests');
+  if (header && !lan) p.push('upgrade-insecure-requests');
   return p.join('; ');
 }
 
@@ -650,7 +651,9 @@ export function assemble(site, meta0, opts = {}) {
   if (pages.length > 1 && col.polls.length) data.polls = col.polls.map((x) => ({ id: x.id, q: x.question, page: (col.pollPage || {})[x.id] || '' })).filter((x) => x.page);
   // CSP: 사이트가 실제로 부르는 바깥 곳만(허용 목록 라이브러리·글꼴 CDN·영상 틀)
   const aiTexts = [...Object.values(expanded), ...Object.entries(src).filter(([p]) => /\.(css|m?js)$/.test(p)).map(([, v]) => asText(v)), ...Object.values(out).filter((v) => typeof v === 'string')];
-  const csp = kitCsp(vb, { live, used: usedSources(aiTexts, { provider: vb.live.provider }) });
+  const usedSrc = usedSources(aiTexts, { provider: vb.live.provider });
+  const csp = kitCsp(vb, { live, used: usedSrc });
+  const cspHeader = kitCsp(vb, { live, used: usedSrc, header: true }); // _headers를 읽는 곳(https)에서만 붙는 판
   Object.assign(out, built.files);
   // 사이트가 기기의 밝게·어둡게를 따르면(사이트 CSS에 제 밝기의 반대쪽 prefers-color-scheme 규칙이 있음) 보조 쪽(강사·발표·접속 확인 화면)도 따르게 표시.
   // boot.js가 data-theme-os를 보고, 단추로 고른 값이 없을 때만 기기 설정을 따름. 한쪽 밝기만 있는 사이트는 지금처럼 그 밝기로
@@ -687,7 +690,7 @@ export function assemble(site, meta0, opts = {}) {
   const auxPaths = ['/console', '/screen', '/poster'].flatMap((x) => [x + '.html', x]);
   out['_headers'] = [
     '/*', '  X-Content-Type-Options: nosniff', '  Referrer-Policy: strict-origin-when-cross-origin', '  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()', '  Strict-Transport-Security: max-age=31536000', ...(noindex ? ['  X-Robots-Tag: noindex, nofollow'] : []), '',
-    ...kitPaths.flatMap((x) => [x, `  Content-Security-Policy: ${csp}`, '']),
+    ...kitPaths.flatMap((x) => [x, `  Content-Security-Policy: ${cspHeader}`, '']),
     ...auxPaths.flatMap((x) => [x, "  Content-Security-Policy: frame-ancestors 'none'", '  X-Frame-Options: DENY', ...(/^\/(console|screen)/.test(x) ? ['  Cross-Origin-Opener-Policy: same-origin'] : []), ...(noindex ? [] : ['  X-Robots-Tag: noindex, nofollow']), '']),
     ...(noindex ? [] : ['/check', '/check.html', '/privacy', '/privacy.html'].flatMap((x) => [x, '  X-Robots-Tag: noindex, nofollow', ''])),
     '/assets/*', '  X-Content-Type-Options: nosniff', '',

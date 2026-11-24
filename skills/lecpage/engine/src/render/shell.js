@@ -58,9 +58,10 @@ export function liveOrigins(bp) {
 
 /**
  * 교실 LAN 길: 실시간 서버(Node)가 사이트도 함께 내보내며 http://<노트북 IP>:8787 로 열릴 수 있음.
- * live.provider가 'http'이고 주소가 비었거나(같은 주소) http면 그렇다고 봄. 이때 meta CSP의 upgrade-insecure-requests는
- * 같은 주소의 CSS·JS까지 https로 바꿔 받아 사이트를 통째로 깨뜨리므로 넣지 않음.
- * 같은 사이트를 https로 내보내면(Caddy 등) Node 서버가 응답 머리글로 이 지시어를 붙임(backends/node-server/server.mjs)
+ * live.provider가 'http'이고 주소가 비었거나(같은 주소) http면 그렇다고 봄(CSP가 그 http·ws 주소를 엶).
+ * upgrade-insecure-requests는 meta CSP에 넣지 않음: 사이트 파일을 http로만 여는 곳(기관 내부망 서버·NAS, 교실 LAN, Safari의 http://localhost 미리보기)에서
+ * 같은 주소의 CSS·JS·그림까지 https로 바꿔 받아 사이트가 통째로 깨짐(ZIP을 내부망 서버에 올린 사이트가 글만 남던 까닭).
+ * https로만 내보내는 곳은 응답 머리글로 붙임: _headers(Netlify·Cloudflare·Vercel, kit/assemble.js), 바로 배포 서버(hosting/src/csp.js), Node 서버(https일 때)
  */
 export function servedOverLan(bp) {
   if (bp.live?.provider !== 'http') return false;
@@ -72,7 +73,6 @@ export function servedOverLan(bp) {
 /** 생성 사이트 보안 정책(CSP): 스크립트는 이 사이트와 지문을 고정한 라이브러리 경로만, 플러그인·base 바꾸기·틀 넣기 금지.
  * file:은 USB·ZIP으로 열 때를 위해. 실시간 서버가 http(교실 LAN)면 그 주소도 허용 */
 export function cspPolicy(ctx, page = 'app') {
-  const lan = servedOverLan(ctx.bp);
   const fonts = 'https://fonts.googleapis.com https://cdn.jsdelivr.net https://hangeul.pstatic.net';
   const live = ctx.live ? liveOrigins(ctx.bp) : [];
   const connect = page === 'check' ? ["'self'", 'file:', 'https:', 'wss:', ...live.filter((x) => /^(http|ws):/.test(x))] : ["'self'", 'file:', ...live];
@@ -86,8 +86,7 @@ export function cspPolicy(ctx, page = 'app') {
     `connect-src ${[...new Set(connect)].join(' ')}`,
     "frame-src 'none'", "object-src 'none'", "base-uri 'none'", "form-action 'self'",
   ];
-  // 섞인 콘텐츠: 교실 LAN 길(http)이 아니면 http 주소를 https로 올려 받음(LAN 길을 https로 내보낼 때는 서버 머리글이 붙임)
-  if (!lan) p.push('upgrade-insecure-requests');
+  // 섞인 콘텐츠 올려 받기(upgrade-insecure-requests)는 meta에 넣지 않음(servedOverLan 설명): https로 내보내는 곳의 응답 머리글이 붙임
   return p.join('; ');
 }
 function cspMeta(ctx, page) { return `<meta http-equiv="Content-Security-Policy" content="${cspPolicy(ctx, page)}">`; }
