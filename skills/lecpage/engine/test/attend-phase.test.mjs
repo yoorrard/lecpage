@@ -9,7 +9,7 @@ import os from 'node:os';
 import { createRequire } from 'node:module';
 import * as E from '../src/index.js';
 import { nodeRuntime, writeFiles } from '../node.js';
-import { startNodeServer, api } from './live-helpers.mjs';
+import { startNodeServer, api, joinDialogReady } from './live-helpers.mjs';
 import { tinySite } from './kit-site.mjs';
 
 const require = createRequire(import.meta.url);
@@ -51,10 +51,19 @@ async function open(ctx, time, file = 'index.html', day) {
 const vis = (page, sel) => page.evaluate((s) => { const n = document.querySelector(s); return !!n && !n.hidden && !!n.offsetParent; }, sel);
 /** 떠 있는 부품(position: fixed — offsetParent가 없음)이 보이는지 */
 const shown = (page, sel) => page.evaluate((s) => { const n = document.querySelector(s); if (!n || n.hidden) return false; const c = getComputedStyle(n), r = n.getBoundingClientRect(); return c.display !== 'none' && c.visibility !== 'hidden' && r.width > 0 && r.height > 0; }, sel);
+/** 열린 참여 창(입실·퇴실)을 적어도 될 때까지 기다림(live-helpers.mjs joinDialogReady — 이 파일은 가짜 시계라 그 30ms 타이머를 시계를 흘려 돌림). 초점은 첫 칸(이름) */
+async function joinDialog(p) {
+  const dlg = await joinDialogReady(p, { fakeClock: true });
+  assert.equal(await p.evaluate(() => document.activeElement && document.activeElement.getAttribute('name')), 'name', '창이 열리면 첫 칸(이름)에 초점');
+  return dlg;
+}
 /** 입실 창에 이름·소속(직무연수라 꼭 적음)을 적고 동의한 뒤 누름 */
 async function fillJoin(p, name) {
-  const dlg = p.locator('[data-join-dialog][open]'); await dlg.waitFor();
-  await dlg.locator('input[name=name]').fill(name); await dlg.locator('input[name=school]').fill('새봄중학교');
+  const dlg = await joinDialog(p);
+  const who = dlg.locator('input[name=name]'), org = dlg.locator('input[name=school]');
+  await who.fill(name); await org.fill('새봄중학교');
+  // 글이 다른 칸에 들어갔으면 여기서 바로 알림(양식이 보내지지 않은 채 뒤의 기다림이 시간 초과로 끝나지 않게)
+  assert.deepEqual([await who.inputValue(), await org.inputValue()], [name, '새봄중학교'], '적은 글이 제 칸에 들어감');
   await dlg.locator('input[name=consent]').check(); await dlg.locator('[data-join-go]').click();
   return dlg;
 }
@@ -140,7 +149,7 @@ test('퇴실: 입실하지 않은 사람이 [퇴실 확인]을 누르면 입실�
     const before = (await A.call('GET', '/participants', { admin: ADMIN })).body.length;
     const p = await open(ctx, '16:30');
     await p.click('[data-attend="out"]');
-    const dlg = p.locator('[data-join-dialog][open]'); await dlg.waitFor();
+    const dlg = await joinDialog(p);
     assert.equal(await dlg.locator('[data-join-go]').textContent(), '퇴실');
     assert.match(await dlg.locator('[data-join-lead]').textContent(), /퇴실 확인에 쓸 이름·소속/);
     // 844×390: 창 안은 스크롤되고 단추 줄은 늘 화면 안(전에는 [나중에]·[입실]이 화면 아래로 잘림)
@@ -160,7 +169,7 @@ test('퇴실: 입실하지 않은 사람이 [퇴실 확인]을 누르면 입실�
     assert.equal((await A.call('GET', '/participants', { admin: ADMIN })).body.length, before, "서버에 이름 없는 '참가자NNN'이 생기지 않음");
     // 이름을 적으면 그 이름으로 퇴실
     await p.click('[data-attend="out"]'); await fillJoin(p, '퇴실만 누른 사람');
-    // 전체 시험을 한꺼번에 돌릴 때(부하) 10초로는 모자란 적이 있어 넉넉히 기다림
+    // 실패하면 그때의 화면 상태를 함께 알림(전에 가끔 시간 초과로 끝난 까닭은 부하가 아니라 창의 첫 초점보다 먼저 적던 것 — joinDialogReady)
     await p.waitForFunction(() => /퇴실 확인/.test(document.querySelector('[data-attend-state]')?.textContent || ''), null, { timeout: 30000 }).catch(async (e) => {
       throw new Error(e.message.split('\n')[0] + ' — ' + JSON.stringify(await p.evaluate(() => ({ open: document.querySelector('[data-join-dialog]').open, err: document.querySelector('[data-join-err]').textContent, toast: document.querySelector('[data-toast]').textContent, dot: document.querySelector('[data-live-status]')?.getAttribute('data-state'), phase: document.documentElement.getAttribute('data-phase') }))));
     });
@@ -177,16 +186,12 @@ test('입실: [입실] → 이름·소속·동의만(별명 칸 없음) → 기�
   try {
     const p = await open(ctx, '14:02');
     await p.click('[data-attend="in"]');
-    const dlg = p.locator('[data-join-dialog][open]');
-    await dlg.waitFor();
+    const dlg = await joinDialog(p);
     assert.equal(await dlg.locator('[data-join-nick]').isVisible(), false, '입실 창에 별명 칸 없음');
     assert.equal(await dlg.locator('input[name=name]').isVisible(), true);
     assert.equal(await dlg.locator('[data-join-go]').textContent(), '입실');
     assert.match(await dlg.locator('[data-join-lead]').textContent(), /이름·소속/);
-    await dlg.locator('input[name=name]').fill('한지우');
-    await dlg.locator('input[name=school]').fill('새봄중학교');
-    await dlg.locator('input[name=consent]').check();
-    await dlg.locator('[data-join-go]').click();
+    await fillJoin(p, '한지우');
     await p.waitForFunction(() => /입실 확인/.test(document.querySelector('[data-attend-state]')?.textContent || ''));
     const me = await p.evaluate(() => JSON.parse(localStorage.getItem('lp-ATTPHASE:me')));
     assert.ok(me.named && me.auto && /^참가자\d+$/.test(me.nickname), '이름은 출석에만, 남에게 보이는 별명은 자동: ' + JSON.stringify(me));

@@ -10,7 +10,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { writeFiles } from '../node.js';
 import { kitBuild } from './kit-site.mjs';
-import { startNodeServer, api, LAN_ARGS, viaLan } from './live-helpers.mjs';
+import { startNodeServer, api, LAN_ARGS, viaLan, joinDialogReady } from './live-helpers.mjs';
 
 const require = createRequire(import.meta.url);
 let chromium = null;
@@ -194,6 +194,7 @@ test('출석 뒤 보드 별명을 서버가 거절하면 창 안에 오류가 �
   const { ctx, p } = await page('/');
   try {
     await p.locator('button[data-attend="in"]').first().click();
+    await joinDialogReady(p); // 창의 첫 초점이 놓인 뒤에 적음(먼저 적으면 소속에 적을 글이 이름 칸에 들어갈 수 있음)
     const dlg = p.locator('[data-join-dialog]');
     await dlg.locator('input[name=name]').fill('김보드'); if (await dlg.locator('input[name=school]').count()) await dlg.locator('input[name=school]').fill('한빛초');
     await dlg.locator('input[name=consent]').check(); await p.click('[data-join-go]'); await p.waitForTimeout(800);

@@ -49,6 +49,23 @@ export function api(base, code) {
   return { root, call };
 }
 
+/**
+ * 참여 창(입실·퇴실·별명)이 열리고, 칸을 적어도 될 때까지 기다림 → 열린 창.
+ * 런타임은 창을 띄우고 30ms 뒤(setTimeout — runtime/lecpage.js ensureJoin) 첫 칸에 초점을 둠. 그 전에 둘째 칸을 채우기 시작하면 Playwright의 fill
+ * (그 칸에 초점 → 글 넣기, 두 단계) 사이에 초점이 첫 칸으로 옮겨 가 둘째 칸의 글이 첫 칸에 들어감(이름 칸에 '한지우새봄중학교', 소속은 빔).
+ * 소속을 꼭 받는 사이트면 양식이 보내지지 않아(참여 요청이 아예 나가지 않음, 오류·알림도 없음) 뒤의 기다림이 시간 초과로 끝남 —
+ * '부하 때문에 가끔 실패'로 알던 입실·리허설 시험이 단독으로도 가끔 실패하던 까닭(2026-11-25에 가려냄. 사람은 30ms 안에 다음 칸으로 가지 못함).
+ * 그래서 그 타이머가 돈 뒤에 적음: 창이 보이면 타이머는 이미 걸려 있음(showModal과 같은 자리에서 걺).
+ *  - 가짜 시계(page.clock)를 쓰는 시험은 fakeClock: true → 시계를 100ms 흘려 그 타이머를 돌림(시계를 멈춰 둔 시험에서도 됨)
+ *  - 그 밖에는 쪽 안에서 더 늦게 끝나는 타이머 하나를 기다림: 타이머는 끝나는 때 차례로 도니 30ms 타이머가 먼저 돎(느린 기기·부하와 상관없음)
+ */
+export async function joinDialogReady(page, { fakeClock = false } = {}) {
+  const dlg = page.locator('[data-join-dialog][open]'); await dlg.waitFor();
+  if (fakeClock) await page.clock.runFor(100);
+  else await page.evaluate(() => new Promise((r) => setTimeout(r, 60)));
+  return dlg;
+}
+
 /** Reads an SSE stream; resolves with the first message matching pred. */
 export async function sseUntil(url, pred, timeoutMs = 5000) {
   const ctl = new AbortController();

@@ -9,7 +9,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { writeFiles } from '../node.js';
 import { kitBuild, refSite } from './kit-site.mjs';
-import { startNodeServer } from './live-helpers.mjs';
+import { startNodeServer, joinDialogReady } from './live-helpers.mjs';
 
 const require = createRequire(import.meta.url);
 let chromium = null;
@@ -72,7 +72,9 @@ test('리허설: 발표 화면이 교재 쪽을 강사 화면·참가자와 같�
     // 연수 날이 오기 전의 리허설이면 '연수 날은 ○월 ○일이에요. 그래도 지금 입실을 기록할까요?'를 한 번 물음 → 확인하면 그대로 기록
     const asked = []; p.on('dialog', (d) => { asked.push(d.message()); d.accept(); });
     await p.bringToFront(); await p.locator('button[data-attend="in"]').first().click();
+    await joinDialogReady(p); // 창의 첫 초점이 놓인 뒤에 적음(먼저 적으면 소속에 적을 글이 가끔 이름 칸에 들어가('김하나새온중') 이 시험이 단독으로도 15번에 1번 실패했음)
     await p.fill('[data-join-dialog] input[name="name"]', '김하나'); await p.fill('[data-join-dialog] input[name="school"]', '새온중');
+    assert.deepEqual([await p.inputValue('[data-join-dialog] input[name="name"]'), await p.inputValue('[data-join-dialog] input[name="school"]')], ['김하나', '새온중'], '적은 글이 제 칸에 들어감');
     assert.ok(asked.length <= 1 && asked.every((m) => /연수 날은 \d+월 \d+일이에요/.test(m)), JSON.stringify(asked));
     await p.check('[data-join-dialog] input[name="consent"]'); await p.click('[data-join-go]');
     await c.bringToFront();
