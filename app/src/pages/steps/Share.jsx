@@ -779,12 +779,12 @@ function Success({ p, bp, update, onEdit, onRepublish, onPrimary, busy, onZip, i
           {lockStale && <p class="small short-stale" role="status"><span>공개 범위나 암호를 바꿨어요. 다시 배포해야 사이트에 반영돼요.</span> <button type="button" class="btn btn-sm" disabled={!!busy} onClick={onRepublish}>다시 배포하기</button></p>}
           <Sites p={p} onPrimary={onPrimary} busy={busy} />
           {/^https:/.test(url) && <ShortLink url={url} short={short} stale={stale} update={update} onRepublish={onRepublish} busy={busy} linkOnly={bp.access?.mode !== 'password' && bp.access?.mode !== 'public'} />}
-          {/* 나중에 쓸 것은 접어 둠(누를 곳을 줄임): 제목 줄에 무엇이 들었는지 한 줄 */}
-          <details class="day-kit day-fold">
+          {/* 연수 전날·당일에 쓸 것: 놓치지 않게 처음부터 펼쳐 둠(제목 줄을 눌러 접을 수 있음, 다시 그려도 접은 채로 — open 값이 그대로라 Preact가 건드리지 않음) */}
+          <details class="day-kit day-fold" open>
             <summary><b class="small" id="venue-h">연수 전날 점검</b> <span class="small muted">그곳 Wi-Fi로 열리는지 확인</span></summary>
             <VenueBody p={p} url={url} instantOn={p.deploy.target === 'lecpage' && instantOn} />
           </details>
-          <details class="day-kit day-fold">
+          <details class="day-kit day-fold" open>
             <summary><b class="small" id="day-kit-h">연수 당일</b> <span class="small muted">{liveOn ? '강사 화면 · 발표 화면 · QR 안내문' : '발표 화면 · QR 안내문'}</span></summary>
             {liveOn && <p class="small muted">강사 화면에서 발표 화면 띄우기·QR 안내문·접속 확인·휴대폰 연결을 모두 해요.</p>}
             <div class="btn-row">

@@ -289,6 +289,9 @@ dialog.lpk.lp-overview::backdrop{background:rgba(0,0,0,.55)}
 /* 떠 있는 도크가 첫 화면의 단추(출석하고 시작하기·바로 가기)를 덮으면 처음 내릴 때까지 감춤(lecpage.js lp-dock-wait). 키보드로 들어오면 보임 */
 .lpk .lp-dock{transition:opacity .25s ease,transform .25s ease}
 html.lp-dock-wait .lpk .lp-dock:not(:focus-within){opacity:0;pointer-events:none;transform:translateY(16px)}
+/* 떠 있는 'Made with Lecpage' 표시도 막대를 감춘 동안(첫 화면: lp-dock-wait·키트 첫 화면의 lp-hero-in)은 함께 감춤(휴대폰에서는 막대 바로 위에 섬).
+   사이트의 누를 것을 덮는 자리에서는 스스로 비켜 줌(lecpage.js initMade의 .is-yield: 안 보이고 눌림도 아래 것이 받음). 키보드로 들어오면 보임 */
+html.lp-dock-wait .lpk.lpk-chrome .lpk-made:not(.is-flow):not(:focus-within),html.lp-hero-in .lpk.lpk-chrome .lpk-made:not(.is-flow):not(:focus-within),.lpk.lpk-chrome .lpk-made.is-yield:not(.is-flow):not(:focus-within){opacity:0;pointer-events:none}
 .lpk .lp-btn-dock{min-height:44px;border-radius:999px;border:0;background:var(--_text);color:var(--_paper);padding:.4em 1em;font-size:.9rem}
 .lpk .lp-btn-dock:hover{background:color-mix(in srgb,var(--_text) 85%,var(--_paper))}
 .lpk .lp-live-dot{width:10px;height:10px;border-radius:50%;margin:0 4px;background:color-mix(in srgb,var(--_text) 45%,transparent)}
@@ -316,29 +319,34 @@ html.lp-dock-wait .lpk .lp-dock:not(:focus-within){opacity:0;pointer-events:none
 .lpk .lp-reactions span .lp-ic{display:block;width:2rem;height:2rem;stroke-width:2}
 @keyframes lpk-float{to{transform:translate(var(--dx,0),-55vh) scale(1.2);opacity:0}}
 /* 도크가 페이지 끝 글을 가리지 않게: 사이트 CSS는 건드리지 않고 키트 부품 묶음(본문 맨 끝)이 도크 높이만큼 자리를 차지 */
-/* '지금' 띠가 보이면 그 높이(+12px)도 --lp-now-pad로 더함(lecpage.js initNowPad). 맨 끝 'Made with Lecpage' 줄도 이 자리 위에 놓임 */
-html.lp-dock-on{scroll-padding-bottom:calc(var(--lp-dock-h,58px) + 24px + var(--lp-now-pad,0px))}
+/* '지금' 띠가 보이면 그 높이(+12px)도 --lp-now-pad로 더함(lecpage.js initNowPad). 맨 끝 'Made with Lecpage' 줄(.is-flow)도 이 자리 위에 놓임.
+   떠 있는 'Made with Lecpage' 표시의 위 끝까지(--lp-made-need, lecpage.js initMade)가 더 높으면 그만큼 비움(맨 끝 글·'신고' 줄을 덮지 않게: 막대가 없는 쪽, 휴대폰처럼 막대·띠 위에 선 때) */
+html.lp-dock-on{scroll-padding-bottom:max(calc(var(--lp-dock-h,58px) + 24px + var(--lp-now-pad,0px)),var(--lp-made-need,0px))}
 /* 도크·띠는 화면 아래 안전 영역(홈 막대)만큼 올라가 있으므로 그만큼 더 비움(노치 휴대폰에서 맨 끝 줄이 도크·띠와 겹치지 않게). 띠가 없으면(--lp-now-pad 0) 더하지 않음 */
-html.lp-dock-on .lpk.lpk-chrome{padding-bottom:calc(var(--lp-dock-h,58px) + 20px + var(--lp-now-pad,0px) + env(safe-area-inset-bottom,0px))}
-.lpk.lpk-chrome{display:block;height:auto;margin:0;padding:0 0 calc(var(--lp-now-pad,0px) + min(var(--lp-now-pad,0px),env(safe-area-inset-bottom,0px)))}
+html.lp-dock-on .lpk.lpk-chrome{padding-bottom:calc(max(var(--lp-dock-h,58px) + 20px + var(--lp-now-pad,0px),var(--lp-made-need,0px)) + env(safe-area-inset-bottom,0px))}
+.lpk.lpk-chrome{display:block;height:auto;margin:0;padding:0 0 max(calc(var(--lp-now-pad,0px) + min(var(--lp-now-pad,0px),env(safe-area-inset-bottom,0px))),calc(var(--lp-made-need,0px) + min(var(--lp-made-need,0px),env(safe-area-inset-bottom,0px))))}
 /* 배포한 곳(바로 배포)이 body 맨 끝에 붙이는 '신고' 줄(<p data-host-report>)은 이 묶음 뒤에 옴: 그대로 두면 비워 둔 자리 아래, 곧 참여 막대·띠 밑에 깔려 누를 수 없음.
    비우는 자리를 그 줄 아래로 옮김(묶음은 비우지 않고 그 줄이 같은 만큼 아래를 비움). 그 줄의 인라인 padding을 이기려고 !important */
 html body:has(>p[data-host-report]) .lpk.lpk-chrome{padding-bottom:0}
-body>p[data-host-report]{padding-bottom:calc(10px + var(--lp-now-pad,0px) + min(var(--lp-now-pad,0px),env(safe-area-inset-bottom,0px)))!important}
-html.lp-dock-on body>p[data-host-report]{padding-bottom:calc(10px + var(--lp-dock-h,58px) + 20px + var(--lp-now-pad,0px) + env(safe-area-inset-bottom,0px))!important}
+body>p[data-host-report]{padding-bottom:calc(10px + max(var(--lp-now-pad,0px) + min(var(--lp-now-pad,0px),env(safe-area-inset-bottom,0px)),var(--lp-made-need,0px) + min(var(--lp-made-need,0px),env(safe-area-inset-bottom,0px))))!important}
+html.lp-dock-on body>p[data-host-report]{padding-bottom:calc(10px + max(var(--lp-dock-h,58px) + 20px + var(--lp-now-pad,0px),var(--lp-made-need,0px)) + env(safe-area-inset-bottom,0px))!important}
 /* 꽉 찬 바닥글 바로 아래면 그 바탕색으로 이어 칠함(lecpage.js initChromeTint가 이 표시와 --lp-chrome-bg를 붙임): 묶음이 사이트 바탕색 띠로 따로 보이지 않게.
    flow-root: 맨 끝 줄('Made with Lecpage')의 위 여백까지 묶음 안에 두어 틈 없이 칠함 */
 .lpk.lpk-chrome.lpk-chrome--tint{display:flow-root;background:var(--lp-chrome-bg,transparent)}
 
 /* ── 'Made with Lecpage' 표시: 작고 차분하게. 사이트 바탕·글자색(--_paper·--_text)을 따라 밝게·어둡게 모두 읽힘 ──
-   화면 폭과 상관없이 .is-flow(페이지 맨 끝 왼쪽에 한 줄, lecpage.js initMade가 붙임): 떠 있으면 넓은 화면에서 본문 글·누를 곳을 덮어서 떠 있는 자리는 쓰지 않음 */
-.lpk.lpk-chrome .lpk-made{position:fixed;z-index:2147482900;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px) + var(--lp-made-lift,0px));display:flex;align-items:center;width:max-content;max-width:calc(100% - 24px);height:30px;margin:0;padding:0 1px 0 0;border:1px solid color-mix(in srgb,var(--_text) 14%,transparent);border-radius:999px;background:color-mix(in srgb,var(--_paper) 86%,transparent);color:color-mix(in srgb,var(--_text) 80%,transparent);box-shadow:0 2px 10px rgba(0,0,0,.08);-webkit-backdrop-filter:blur(10px) saturate(1.2);backdrop-filter:blur(10px) saturate(1.2);font:600 12px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;letter-spacing:0;text-transform:none;word-break:normal;animation:lpk-made-in .45s cubic-bezier(.16,1,.3,1) both;transition:bottom .25s cubic-bezier(.16,1,.3,1)}
-.lpk.lpk-chrome .lpk-made-a{display:inline-flex;align-items:center;gap:6px;height:100%;margin:0;padding:0 4px 0 8px;border:0;border-radius:999px;background:none;color:inherit;font:inherit;text-decoration:none;white-space:nowrap;cursor:pointer}
+   화면 왼쪽 아래에 떠서 스크롤을 따라다님(오른쪽 아래는 참여 막대 자리 → 반대쪽 구석. 넓은 화면은 막대와 같은 줄, 휴대폰은 화면 폭 막대 바로 위에 왼쪽 끝을 맞춤).
+   lecpage.js initMade가 그 자리에 걸친 막대·'지금' 띠·사이트의 아래 고정 단추 위로 --lp-made-lift만큼 올리고, 사이트의 누를 것을 덮으면 .is-yield로 비켜 줌.
+   비킬 자리가 없거나 낮은 화면(높이 520px 이하)이면 .is-flow(페이지 맨 끝 왼쪽에 한 줄, initMade가 붙임). .lpk-made-base는 떠 있을 때의 제자리를 재는 눈금(보이지 않음, initMade가 넣음).
+   안쪽 여백: 로고 왼쪽과 닫기(×) 오른쪽이 같게 보이도록(×는 24px 칸에 16px 그림 — 예전 28px 칸은 오른쪽이 비어 보였음) */
+.lpk.lpk-chrome .lpk-made{position:fixed;z-index:2147482900;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px) + var(--lp-made-lift,0px));display:flex;align-items:center;width:max-content;max-width:calc(100% - 24px);height:30px;margin:0;padding:0 2px 0 0;border:1px solid color-mix(in srgb,var(--_text) 14%,transparent);border-radius:999px;background:color-mix(in srgb,var(--_paper) 86%,transparent);color:color-mix(in srgb,var(--_text) 80%,transparent);box-shadow:0 2px 10px rgba(0,0,0,.08);-webkit-backdrop-filter:blur(10px) saturate(1.2);backdrop-filter:blur(10px) saturate(1.2);font:600 12px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;letter-spacing:0;text-transform:none;word-break:normal;animation:lpk-made-in .45s cubic-bezier(.16,1,.3,1) backwards;transition:bottom .25s cubic-bezier(.16,1,.3,1),opacity .25s ease}
+.lpk.lpk-chrome .lpk-made-base{position:fixed;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));width:0;height:0;margin:0;padding:0;border:0;visibility:hidden;pointer-events:none}
+.lpk.lpk-chrome .lpk-made-a{display:inline-flex;align-items:center;gap:6px;height:100%;margin:0;padding:0 0 0 9px;border:0;border-radius:999px;background:none;color:inherit;font:inherit;text-decoration:none;white-space:nowrap;cursor:pointer}
 .lpk.lpk-chrome .lpk-made-a:hover{color:var(--_text)}
 .lpk.lpk-chrome .lpk-made-logo{display:block;flex:none;width:16px;height:16px;margin:0}
-.lpk.lpk-chrome .lpk-made-x{display:grid;place-items:center;flex:none;width:28px;height:28px;margin:0;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;opacity:.72;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.lpk.lpk-chrome .lpk-made-x{display:grid;place-items:center;flex:none;width:24px;height:24px;margin:0;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;opacity:.72;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .lpk.lpk-chrome .lpk-made-x:hover{opacity:1;background:color-mix(in srgb,var(--_text) 9%,transparent)}
-.lpk.lpk-chrome .lpk-made-x svg{display:block;width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.lpk.lpk-chrome .lpk-made-x svg{display:block;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
 .lpk.lpk-chrome .lpk-made :focus-visible{outline:2px solid var(--_act);outline-offset:1px}
 .lpk.lpk-chrome .lpk-made.is-flow{position:relative;left:auto;bottom:auto;margin:28px 0 16px max(16px,env(safe-area-inset-left,0px));box-shadow:none;transition:none}
 @keyframes lpk-made-in{from{opacity:0;transform:translateY(6px)}}
@@ -380,11 +388,11 @@ html.lp-dock-on .lpk.lpk-now{bottom:calc(var(--lp-dock-h,58px) + 22px + env(safe
 .lpk .lp-share-scr{text-align:center}
 .lpk .lp-share-scr a{color:inherit;font-weight:700;text-decoration:underline}
 .lpk .lp-dialog [data-join-err]{color:var(--_danger)!important}
-.lpk .lp-toast{position:fixed;z-index:2147483002;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);max-width:calc(100% - 32px);padding:10px 18px;border-radius:var(--_rs);background:var(--_text);color:var(--_paper);font-weight:650;font-size:.92rem;text-align:center;opacity:0;pointer-events:none;transition:opacity .2s,transform .3s}
+.lpk .lp-toast{position:fixed;z-index:2147483002;left:50%;bottom:calc(max(84px,var(--lp-made-need,0px)) + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);max-width:calc(100% - 32px);padding:10px 18px;border-radius:var(--_rs);background:var(--_text);color:var(--_paper);font-weight:650;font-size:.92rem;text-align:center;opacity:0;pointer-events:none;transition:opacity .2s,transform .3s}
 .lpk .lp-toast.is-on{opacity:1;transform:translate(-50%,0)}
-html.lp-dock-on .lpk .lp-toast{bottom:calc(var(--lp-dock-h,58px) + 26px + env(safe-area-inset-bottom,0px))}
+html.lp-dock-on .lpk .lp-toast{bottom:calc(max(var(--lp-dock-h,58px) + 26px,var(--lp-made-need,0px)) + env(safe-area-inset-bottom,0px))}
 /* '지금' 줄이 떠 있으면 알림은 그 위로 */
-html:has(.lpk-now [data-now]:not([hidden])) .lpk .lp-toast{bottom:calc(var(--lp-dock-h,0px) + 96px + env(safe-area-inset-bottom,0px))}
+html:has(.lpk-now [data-now]:not([hidden])) .lpk .lp-toast{bottom:calc(max(var(--lp-dock-h,0px) + 96px,var(--lp-made-need,0px)) + env(safe-area-inset-bottom,0px))}
 .lpk .lp-live-down{margin-bottom:8px}
 /* 참여 기능 없이 배포한 사이트의 안내 한 줄: AI가 만든 카드 안에 들어가므로 상자(바탕·안쪽 여백) 없이 글만 */
 .lpk .lp-note[data-live-off]{padding:0;background:none;border-radius:0}
@@ -397,6 +405,8 @@ html:has(.lpk-now [data-now]:not([hidden])) .lpk .lp-toast{bottom:calc(var(--lp-
 }
 @media (max-width:600px){
   .lpk .lp-dock{left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));justify-content:center;max-width:none}
+  /* 떠 있는 'Made with Lecpage' 표시도 휴대폰에서는 막대·'지금' 띠의 왼쪽 끝(8px)에 맞춤 */
+  .lpk.lpk-chrome .lpk-made:not(.is-flow),.lpk.lpk-chrome .lpk-made-base{left:max(8px,env(safe-area-inset-left,0px))}
   .lpk .lp-btn-dock{padding:.4em .8em}
   .lpk .lp-dock .lpk-dock-share{display:none} /* 휴대폰 도크는 한 줄로(QR은 발표 화면·접속 칸에) */
   .lpk .lp-materials > li{grid-template-columns:minmax(0,1fr) auto}
@@ -423,7 +433,8 @@ html:has(.lpk-now [data-now]:not([hidden])) .lpk .lp-toast{bottom:calc(var(--lp-
   .lpk .lp-btn-sm,.lpk .lp-now-more,.lpk .lp-now-cta,.lpk .lp-seg span{min-height:44px}
   .lpk .lp-now-more,.lpk .lp-tabs button{min-width:44px}
 }
-/* 'Made with Lecpage' 닫기: 보이는 크기(28px)는 그대로 두고 누르는 곳만 위·아래·오른쪽으로 넓힘 */
+/* 'Made with Lecpage' 닫기: 보이는 크기(24px)는 그대로 두고 누르는 곳만 알약 안에서 위·아래·오른쪽 끝까지(왼쪽은 링크라 넓히지 않음).
+   떠 있는 표시라 알약 밖으로는 넓히지 않음: 밖은 사이트 본문 위여서, 본문을 누르려다 표시가 닫힘(이 브라우저에서 다시 안 보임) */
 .lpk.lpk-chrome .lpk-made-x{position:relative}
-.lpk.lpk-chrome .lpk-made-x::after{content:"";position:absolute;inset:-8px -8px -8px 0}
+.lpk.lpk-chrome .lpk-made-x::after{content:"";position:absolute;inset:-3px -3px -3px 0}
 @media print{.lpk.lpk-chrome,.lpk.lpk-now{display:none!important}}

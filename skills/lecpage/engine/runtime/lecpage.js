@@ -1784,30 +1784,166 @@
   }
 
   /* ── 'Made with Lecpage' 표시(엔진 조립이 참가자 쪽에만 넣음) ──────────
-     닫으면 이 브라우저에서는 다시 보이지 않음(저장소를 못 쓰는 곳은 이 화면에서만). 넓은 화면은 왼쪽 아래 구석에 떠 있되
-     그 자리를 다른 떠 있는 것(참여 막대·'지금' 띠·사이트의 아래 고정 단추)이 차지하면 그 위로 비켜 서고, 비킬 자리가 없거나
-     휴대폰(좁거나 낮은 화면)이면 떠 있지 않고 페이지 맨 끝 왼쪽에 한 줄로 놓임(아무것도 가리지 않게) */
+     닫으면 이 브라우저에서는 다시 보이지 않음(저장소를 못 쓰는 곳은 이 화면에서만).
+     화면 왼쪽 아래에 떠서 스크롤을 따라다님(2026-11-25 운영자 결정. 그 전에는 페이지 맨 끝 한 줄이라 끝까지 내린 사람만 봤음).
+     왼쪽 아래인 까닭: 오른쪽 아래는 참여 막대(누르는 도구) 자리 → 꾸밈 표시는 반대쪽 구석에 두어 막대 단추와 헷갈려 누르지 않게(다른 서비스도 주 도구가 오른쪽 아래면 보조 표시는 왼쪽 아래).
+     넓은 화면은 막대와 같은 줄의 빈 왼쪽 구석이라 화면을 더 가리지 않음. 그 자리에 다른 떠 있는 것(휴대폰의 화면 폭 막대·'지금' 띠·사이트의 아래 고정 단추)이 걸치면 그 위로 비켜 섬.
+     화면에 지장을 주지 않게: ① 사이트의 누를 것(링크·단추·입력 칸·교재 넘기기 …)을 덮는 자리에서는 스스로 비켜 줌(.is-yield: 안 보이고 눌림도 아래 것이 받음. 지나가면 다시 나타남)
+     ② 비킬 자리가 없거나(화면 높이의 28% 넘게 올라가야 함) 낮은 화면(가로로 돌린 휴대폰: 높이 520px 이하)이면 떠 있지 않고 페이지 맨 끝 왼쪽에 한 줄(.is-flow)
+     ③ 참여 막대를 감춘 동안(첫 화면)은 kit.css가 함께 감춤 */
   var MADE_OFF = 'lp-made-off', madeOffMem = false;
   function initMade() {
     var made = $('[data-lp-made]'); if (!made) return;
     var off = madeOffMem; try { off = off || localStorage.getItem(MADE_OFF) === '1'; } catch (e) { }
     if (off) { made.parentNode.removeChild(made); return; }
-    made.hidden = false;
+    var gone = false, base = null, stop = function () { };
     var x = $('[data-lp-made-close]', made);
-    if (x) x.addEventListener('click', function () {
+    if (x) x.addEventListener('click', function (ev) {
       madeOffMem = true; try { localStorage.setItem(MADE_OFF, '1'); } catch (e) { }
-      // 닫기 단추에 있던 포커스는 문서 순서로 바로 앞의 누를 곳으로(맨 앞으로 튀지 않게)
-      var had = made.contains(doc.activeElement), prev = null;
+      // 키보드로 닫았으면 포커스는 문서 순서로 바로 앞의 누를 곳으로(맨 앞으로 튀지 않게).
+      // 마우스·손가락으로 닫았으면 옮기지 않음: 표시가 떠 있어 '앞의 누를 곳'이 화면 밖 페이지 맨 끝일 수 있고, 입력 칸이면 휴대폰 자판이 뜸
+      var had = !(ev && ev.detail) && made.contains(doc.activeElement), prev = null;
       if (had) $$('a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select,textarea,summary,[tabindex]:not([tabindex="-1"])').forEach(function (n) {
         if (!made.contains(n) && n.getClientRects().length && (made.compareDocumentPosition(n) & 2)) prev = n;
       });
       made.parentNode.removeChild(made);
+      // 떠 있던 자리의 흔적(눈금·페이지 끝에 비워 둔 자리)도 함께 치움
+      gone = true; if (base && base.parentNode) base.parentNode.removeChild(base); root.style.removeProperty('--lp-made-need'); stop();
       if (prev) { try { prev.focus({ preventScroll: true }); } catch (e) { prev.focus(); } }
     });
-    // 화면 폭과 상관없이 페이지 맨 끝(바닥글 아래) 왼쪽에 한 줄로: 떠 있으면 넓은 화면에서 본문 글·누를 곳(교재 [이전 쪽] 등)을 덮음
-    made.classList.add('is-flow');
+    // 자리를 잴 수 없는 브라우저: 예전처럼 페이지 맨 끝 한 줄
+    if (!doc.elementsFromPoint || !window.getComputedStyle) { made.classList.add('is-flow'); made.hidden = false; return; }
+    var SHORT = window.matchMedia ? matchMedia('(max-height: 520px)') : null;
+    var dock = $('[data-dock]'), nowBand = $('.lpk.lpk-now:not(.lpk-now--placed)');
+    var GAP = 10, W = 0, H = 0, timer = 0, idle = 0, held = 0, stuck = false, last = 0, flow = false, need = '', cx = 0, cy = 0, yielded = false, moved = 0, ro = null;
+    // 떠 있을 때의 제자리(왼쪽 아래 끝)를 재는 눈금: 표시가 맨 끝 한 줄이거나 자리를 옮기는 중이어도 늘 그 자리를 가리킴(kit.css .lpk-made-base, 보이지 않음)
+    base = doc.createElement('span'); base.className = 'lpk-made-base'; base.setAttribute('aria-hidden', 'true');
+    made.parentNode.insertBefore(base, made.nextSibling);
+    var TAP = 'a[href],button,input,select,textarea,summary,label,iframe,video,audio,[role="button"],[role="tab"],[role="link"],[tabindex]:not([tabindex="-1"]),[contenteditable]:not([contenteditable="false"]),[onclick]';
+    // 감춰 둔 참여 막대는 16px 아래로 밀려 있음(kit.css) → 밀린 만큼을 빼 제자리로 셈
+    function shiftY(cs) { var m = /^matrix(3d)?\((.+)\)$/.exec(cs.transform || ''); if (!m) return 0; var v = m[2].split(','); return parseFloat(v[m[1] ? 13 : 5]) || 0; }
+    // 키트의 떠 있는 부품(참여 막대·'지금' 띠)이 그 자리(x0~x1, 아래 끝 y)에 걸치면 그 위쪽 끝. 감춰 둔 동안에도 셈(나타날 때 표시와 겹치지 않게)
+    function kitTop(n, x0, x1, y) {
+      if (!n || n.hidden) return Infinity;
+      var cs = getComputedStyle(n); if (cs.position !== 'fixed' || cs.display === 'none') return Infinity;
+      var r = n.getBoundingClientRect(), dy = shiftY(cs); if (r.width < 8 || r.height < 8) return Infinity;
+      return r.right > x0 && r.left < x1 && r.top - dy < y && r.bottom - dy > y - H ? r.top - dy : Infinity;
+    }
+    // 자리를 훑는 점의 가로 자리(step px쯤 간격): 떠 있는 것은 40px(사이트의 작은 고정 단추 — 44~48px짜리 '맨 위로' 같은 것 — 가 점 사이로 빠지지 않게), 누를 것은 20px(작은 링크·아이콘)
+    function cols(x0, x1, step) { var a = [], n = Math.max(2, Math.ceil((x1 - x0 - 8) / step)); for (var i = 0; i <= n; i++) a.push(x0 + 4 + (x1 - x0 - 8) * i / n); return a; }
+    // 그 자리를 차지한 떠 있는 것의 위쪽 끝. 없으면 Infinity
+    // 거르는 것: 이 표시, 화면을 거의 다 덮는 배경·덮개(장식용 고정 배경 등), 안 보이는 것, 본문 뒤에 깔린 것(z-index 음수),
+    // 글도 누를 것도 없는 꾸밈(구석의 고정 그러데이션·무늬), 위에 붙는 sticky(머리글), 아직 아래에 붙지 않은 sticky(흐름 속에서 지나가는 중)
+    function blockerTop(x0, x1, y) {
+      var top = Math.min(kitTop(dock, x0, x1, y), kitTop(nowBand, x0, x1, y));
+      var xs = cols(x0, x1, 40), ys = [y - 3, y - H + 3], seen = [];
+      for (var i = 0; i < xs.length; i++) for (var j = 0; j < ys.length; j++) {
+        var list = doc.elementsFromPoint(xs[i], ys[j]) || [];
+        for (var k = 0; k < list.length; k++) {
+          var n = list[k]; if (n === root || n === doc.body || seen.indexOf(n) >= 0) continue;
+          seen.push(n);
+          if (made.contains(n) || (dock && dock.contains(n)) || (nowBand && nowBand.contains(n))) continue;
+          var cs = getComputedStyle(n), pos = cs.position;
+          if (pos !== 'fixed' && !(pos === 'sticky' && cs.bottom !== 'auto')) continue;
+          if (+cs.opacity < 0.05 || cs.visibility === 'hidden' || parseInt(cs.zIndex, 10) < 0) continue;
+          var r = n.getBoundingClientRect();
+          if (r.width >= innerWidth * 0.9 && r.height >= innerHeight * 0.5) continue;
+          if (pos === 'sticky' && Math.abs(r.bottom - ((root.clientHeight || innerHeight) - (parseFloat(cs.bottom) || 0))) > 2) continue;
+          if (n.closest('[aria-hidden="true"]') || (!n.matches(TAP) && !n.querySelector(TAP) && !(n.textContent || '').trim())) continue;
+          if (r.top < top) top = r.top;
+        }
+      }
+      return top;
+    }
+    function setFlow(on, lift) {
+      flow = on; made.classList.toggle('is-flow', on);
+      made.style.setProperty('--lp-made-lift', (on ? 0 : lift) + 'px');
+      // 페이지 맨 끝에서 마지막 글·'신고' 줄을 덮지 않게 표시의 위 끝까지 자리를 비움(kit.css: 참여 막대·띠 몫보다 클 때만 늘어남). 맨 끝 한 줄일 때는 0
+      var v = on ? '' : (lift + H + 20) + 'px';
+      if (v !== need) { need = v; if (v) root.style.setProperty('--lp-made-need', v); else root.style.removeProperty('--lp-made-need'); }
+    }
+    // 그 점(x, y)에서 이 표시 밑에 사이트의 누를 것이 있는지: 링크·단추·입력 칸·영상 같은 것(TAP)과, 손가락 커서로 바뀌는 것(사이트가 만든 누르는 칸)
+    // 손가락 커서는 내려받는 값이라, 사이트가 body에 통째로 걸어 둔 경우(예전 iOS용 요령)에는 보지 않음(어디서나 비켜 표시가 영영 안 보이게 됨)
+    function tapAt(px, py) {
+      var els = doc.elementsFromPoint(px, py) || [], byCursor = getComputedStyle(doc.body).cursor !== 'pointer';
+      for (var k = 0; k < els.length; k++) {
+        var n = els[k]; if (n === root || n === doc.body || made.contains(n)) continue;
+        // 키트의 떠 있는 부품(묶음 안의 막대, 떠 있는 '지금' 띠)과는 자리를 잡을 때 이미 겹치지 않게 함. AI가 본문에 놓은 '지금' 띠·막대는 본문처럼 누를 것으로 봄
+        if ((n.closest && n.closest('.lpk-chrome')) || (nowBand && nowBand.contains(n))) continue;
+        if (n.closest && n.closest(TAP)) return true;
+        if (byCursor && getComputedStyle(n).cursor === 'pointer') return true;
+      }
+      return false;
+    }
+    function covers() {
+      var xs = cols(cx, cx + W, 20), ys = [cy + H * 0.27, cy + H * 0.73];
+      for (var a = 0; a < xs.length; a++) for (var c = 0; c < ys.length; c++) if (tapAt(xs[a], ys[c])) return true;
+      return false;
+    }
+    function setYield(on) { if (on === yielded) return; yielded = on; made.classList.toggle('is-yield', on); }
+    // 스크롤하는 동안에는 재지 않음(자리를 훑는 일이 느린 휴대폰에서 스크롤을 끊지 않게): 멈춘 뒤(0.15초쯤) 한 번.
+    // 그사이에는 마지막 판단 그대로 떠 있음 — 그때 눌리면 아래 click 지킴이가 받음(누른 점 밑에 누를 것이 있으면 비켜 줌)
+    function busy() { return Date.now() - moved < 150; }
+    // 스크롤이 끊이지 않는 사이트(저절로 넘어가는 띠 같은 것)에서도 2초에 한 번은 잼(판단이 낡은 채 굳지 않게)
+    function whenIdle() {
+      if (idle || gone) return;
+      if (!held) held = Date.now();
+      idle = setTimeout(function () { idle = 0; if (busy() && Date.now() - held < 2000) whenIdle(); else { held = 0; place(true); } }, 160);
+    }
+    function place(force) {
+      timer = 0;
+      if (gone) return;
+      if (force !== true && busy()) { whenIdle(); return; }
+      last = Date.now();
+      if (SHORT && SHORT.matches) { setFlow(true, 0); setYield(false); return; }
+      // 크기는 떠 있을 때나 맨 끝 한 줄일 때나 같음 → 자리를 바꾸지 않고 잼(맨 끝까지 내린 화면이 튀지 않게)
+      if (!W) { var r0 = made.getBoundingClientRect(); W = r0.width; H = r0.height; if (!W) return; }
+      var b = base.getBoundingClientRect(), x0 = b.left, x1 = x0 + W, y = b.bottom, t, n = 0;
+      while (n++ < 4 && (t = blockerTop(x0, x1, y)) < y) y = t - GAP;
+      var lift = Math.max(0, Math.round(b.bottom - y)), vh = root.clientHeight || innerHeight;
+      setFlow(lift > vh * 0.28 || y - H < 8, lift);
+      if (flow) { setYield(false); return; }
+      cx = x0; cy = y - H;
+      setYield(stuck || covers());
+    }
+    // 그 밖의 때(크기 변화·글 길이 변화·누름 뒤)는 0.3초에 한 번까지
+    function later() { if (gone) return; if (busy()) { whenIdle(); return; } if (timer) return; timer = setTimeout(place, Math.max(0, 300 - (Date.now() - last))); }
+    function remeasure() { W = 0; stuck = false; later(); }
+    // 마우스·손가락으로 누른 뒤에는 초점을 표시 안에 남기지 않음: 남으면 '키보드로 들어오면 보임'(kit.css :focus-within) 때문에 누를 것 위에서도 비켜 주지 못함
+    function dropFocus() { setTimeout(function () { var f = doc.activeElement; if (f && made.contains(f)) { try { f.blur(); } catch (e) { } } }, 0); }
+    // 낡은 판단으로 떠 있다가 눌렸을 때(누른 점 바로 밑에 사이트의 누를 것이 있음): lecpage.com을 열거나 표시를 닫지 않고 비켜 줌 → 다시 누르면 아래 것이 받음
+    // 키보드로 누른 것(detail 0)은 자리와 상관없으니 그대로
+    made.addEventListener('click', function (e) {
+      if (flow || gone || !e.detail) return;
+      dropFocus();
+      if (!tapAt(e.clientX, e.clientY)) return;
+      // 다음 스크롤·크기 변화까지 비킨 채로 둠: 훑는 점 사이에 들어가는 작은 링크 위에서 곧바로 다시 나타나 또 가로막지 않게
+      e.preventDefault(); e.stopPropagation(); stuck = true; setYield(true);
+    }, true);
+    // 처음 보이는 때는 이 차례가 끝난 뒤(start()가 참여 막대를 띄우고 첫 화면 가림까지 정한 뒤): 구석에 떴다가 막대 위로 옮겨 가는 모습이 보이지 않게
+    setTimeout(function () { if (gone) return; made.hidden = false; place(true); }, 0);
+    var onScroll = function () { moved = Date.now(); stuck = false; whenIdle(); }, onClick = function () { setTimeout(later, 350); };
+    addEventListener('resize', remeasure);
+    // 안쪽 칸이 스크롤되는 사이트도 받게 캡처로(표시 밑으로 누를 것이 지나가고, 사이트의 아래 고정 단추가 내리는 중에 나타나기도 함)
+    doc.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    // 누르거나 접고 펴서 글이 밀리면(스크롤 없이 누를 것이 표시 밑으로 옴) 다시 봄. 글 길이가 바뀌는 것은 아래 ResizeObserver(body)도 봄
+    doc.addEventListener('click', onClick, { capture: true, passive: true });
+    addEventListener('load', remeasure); addEventListener('pageshow', later);
+    if (SHORT && SHORT.addEventListener) SHORT.addEventListener('change', remeasure);
+    if ('ResizeObserver' in window) { ro = new ResizeObserver(later); [dock, nowBand, doc.body].forEach(function (n) { if (n) ro.observe(n); }); }
+    if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(remeasure);
+    // 닫은 뒤에는 더 듣지 않음
+    stop = function () {
+      clearTimeout(timer); clearTimeout(idle); timer = idle = held = 0;
+      removeEventListener('resize', remeasure); removeEventListener('load', remeasure); removeEventListener('pageshow', later);
+      doc.removeEventListener('scroll', onScroll, true); doc.removeEventListener('click', onClick, true);
+      if (SHORT && SHORT.removeEventListener) SHORT.removeEventListener('change', remeasure);
+      if (ro) ro.disconnect();
+    };
+    // 늦게 자리 잡는 사이트(글꼴·그림·늦게 붙는 단추)
+    setTimeout(later, 400); setTimeout(later, 1500);
   }
-  /* 키트 묶음(.lpk-chrome: 맨 끝 'Made with Lecpage' 줄, 참여 막대·'지금' 띠가 가리지 않게 비워 둔 자리)이 꽉 찬 바닥글 아래에
+  /* 키트 묶음(.lpk-chrome: 참여 막대·'지금' 띠·떠 있는 'Made with Lecpage' 표시가 맨 끝 글을 가리지 않게 비워 둔 자리, 낮은 화면에서는 맨 끝 'Made with Lecpage' 줄)이 꽉 찬 바닥글 아래에
      사이트 바탕색 띠로 따로 보이지 않게: 바로 위에 틈 없이 닿은 것이 화면 너비를 다 채우고 제 바탕색이 있으면 그 색으로 이어 칠함.
      사이트 CSS·HTML은 건드리지 않음(묶음에 표시와 색 값만). 닿아 있지 않거나 색을 알 수 없으면(그림·그러데이션뿐) 지금처럼 둠 */
   function initChromeTint() {

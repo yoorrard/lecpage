@@ -126,6 +126,21 @@ async function seed(p, script) {
     await p.waitForSelector('dialog[open] button:has-text("참여 기능 없이")', { timeout: 2500 }).then((x) => x.click()).catch(() => {});
     await p.waitForSelector('.success .big-url', { timeout: 60000 });
     L.ok('retry reuses the same site (one new site only)', st.sites === 1 && /s-site1\./.test(await p.locator('.success .big-url').innerText()), `sites ${st.sites}`);
+    // 배포 완료 카드의 '연수 전날 점검'·'연수 당일'은 처음부터 펼쳐 있음(놓치지 않게). 제목 줄로 접을 수 있고, 카드가 다시 그려져도 접은 채로
+    {
+      const folds = p.locator('.success details.day-fold');
+      const open0 = await folds.evaluateAll((ns) => ns.map((n) => [n.querySelector('summary b')?.textContent, n.open]));
+      const seen = await p.locator('.success details.day-fold a.btn:has-text("발표 화면 열기")').isVisible().catch(() => false) && await p.locator('.success details.day-fold .venue').first().isVisible().catch(() => false);
+      L.ok('done card: 연수 전날 점검 · 연수 당일 are open by default (their buttons are visible)', open0.length === 2 && open0.every(([, o]) => o === true) && open0[0][0] === '연수 전날 점검' && open0[1][0] === '연수 당일' && seen, JSON.stringify({ open0, seen }));
+      await folds.nth(1).locator('summary').click();
+      // 카드를 실제로 다시 그리게 함: [QR 크게 보기]를 열고 닫으면 완료 카드의 상태가 두 번 바뀜
+      await p.click('.success .qr-zoom'); const bigOpen = await p.waitForSelector('dialog[open]', { timeout: 5000 }).then(() => true).catch(() => false);
+      await p.keyboard.press('Escape'); await p.waitForFunction(() => !document.querySelector('dialog[open]'), null, { timeout: 5000 }).catch(() => {});
+      await p.waitForTimeout(300);
+      const shut = await folds.evaluateAll((ns) => ns.map((n) => n.open));
+      await folds.nth(1).locator('summary').click();
+      L.ok('done card: a section the lecturer folded stays folded across a re-render (QR 크게 보기 opened and closed), and opens again', bigOpen && shut[0] === true && shut[1] === false && await folds.nth(1).evaluate((n) => n.open) === true, JSON.stringify({ bigOpen, shut }));
+    }
     // 배포한 뒤 체크리스트와 바로 배포 카드가 같은 '참여 기록 수'를 함께 묻더라도 서버에는 한 번만 감(전에는 두 번: 요청 하나 + 사이트 객체 요청 하나씩 더 썼음)
     await p.waitForTimeout(600);
     const recCalls = st.calls.filter((c) => c === 'GET /api/sites/site1/records').length;

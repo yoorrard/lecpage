@@ -273,7 +273,7 @@ div.pub-mode{cursor:default}
 .feat-chips{gap:6px}
 /* 배포 완료: 연수 당일 묶음 */
 .day-kit{display:grid;gap:6px;padding-top:10px;border-top:1px solid color-mix(in srgb,currentColor 14%,transparent)}
-/* 완료 카드에서 나중에 쓸 것(연수 전날 점검·연수 당일)은 접어 둠: 제목 줄에 무엇이 들었는지 한 줄 */
+/* 완료 카드의 연수 전날 점검·연수 당일: 처음부터 펼쳐 둠(제목 줄을 눌러 접음). 제목 줄에 무엇이 들었는지 한 줄 */
 .day-fold>summary{cursor:pointer;padding:6px 0}
 .day-fold>summary>.muted{margin-left:6px}
 @media (pointer:coarse){.day-fold>summary{padding:11px 0}}
