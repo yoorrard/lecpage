@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "updated": "2026-11-26",
-  "checked": "2026-11-26",
+  "checked": "2026-11-28",
   "about": {"note":"AI 모델 값표(OpenAI·Claude, 입력·출력 100만 토큰당 달러, 출시일, 글 출력 여부, 문맥 길이). scripts/ai-catalog/refresh.mjs가 하루 한 번 만들어요. 손으로 고치지 마세요.","sources":{"openrouter":"https://openrouter.ai/api/v1/models","modelsdev":"https://models.dev/api.json (MIT License, Copyright (c) 2025 models.dev)"}},
   "models": [
     {"id":"anthropic/claude-fable-5","in":10,"out":50,"date":"2026-06-09","text":true,"ctx":1000000,"src":"or"},
